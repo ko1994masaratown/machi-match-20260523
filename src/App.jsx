@@ -1631,8 +1631,18 @@ export default function MachiMatch() {
   const urgentCount = TOWNS.filter(t => t.sos_score >= 90).length;
   const totalJobs = TOWNS.reduce((acc, t) => acc + t.jobs.length, 0);
 
-  const [heroIdx] = useState(() => Math.floor(Math.random() * REGION_HIGHLIGHTS.length));
-  const highlight = REGION_HIGHLIGHTS[heroIdx];
+  const [currentSlide, setCurrentSlide] = useState(0);
+
+  useEffect(() => {
+    if (!TOWNS.length) return;
+    const timer = setInterval(() => {
+      setCurrentSlide(prev => (prev + 1) % TOWNS.length);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const currentTown = TOWNS[currentSlide] || TOWNS[0];
+  const slideColor = sosColor(currentTown.sos_score);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col" style={{ fontFamily: "'Hiragino Sans', 'Noto Sans JP', sans-serif" }}>
@@ -1679,11 +1689,12 @@ export default function MachiMatch() {
             <div className="relative w-full overflow-hidden" style={{ minHeight: "440px" }}>
               {/* Background: fallback gradient always rendered first */}
               <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-800" />
-              {/* Background photo */}
+              {/* Background photo — rotates with currentTown */}
               <img
-                src={highlight.image}
-                alt={highlight.area}
-                className="absolute inset-0 w-full h-full object-cover"
+                key={currentSlide}
+                src={currentTown.imageUrl}
+                alt={currentTown.name}
+                className="absolute inset-0 w-full h-full object-cover animate-fade-in"
                 onError={e => { e.target.style.display = "none"; }}
               />
               {/* Dark overlay: stronger on left for text readability */}
@@ -1736,38 +1747,68 @@ export default function MachiMatch() {
                   {/* Right: Today's Regional Art card — PC only */}
                   <div className="hidden lg:flex flex-col w-72 xl:w-80 flex-shrink-0">
                     <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl overflow-hidden shadow-2xl">
+                      {/* Card header with dot indicators */}
                       <div className="px-4 py-2.5 flex items-center justify-between border-b border-white/15">
                         <div className="text-xs text-white/60 font-semibold uppercase tracking-wider">今日の地域アート</div>
-                        <div className="text-xs text-white/40">{new Date().toLocaleDateString("ja-JP", { month: "long", day: "numeric" })}</div>
+                        <div className="flex gap-1 items-center">
+                          {TOWNS.map((_, i) => (
+                            <button
+                              key={i}
+                              onClick={() => setCurrentSlide(i)}
+                              className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${i === currentSlide ? "bg-white scale-125" : "bg-white/30 hover:bg-white/50"}`}
+                            />
+                          ))}
+                        </div>
                       </div>
-                      <div className="relative h-40 overflow-hidden">
+
+                      {/* Town photo with fade animation */}
+                      <div key={currentSlide} className="relative h-44 overflow-hidden animate-fade-in">
+                        <div className={`absolute inset-0 ${slideColor.label === "緊急" ? "bg-gradient-to-br from-red-800 to-rose-700" : "bg-gradient-to-br from-indigo-800 to-purple-700"}`} />
                         <img
-                          src={highlight.image}
-                          alt={highlight.area}
-                          className="w-full h-full object-cover"
+                          src={currentTown.imageUrl}
+                          alt={currentTown.name}
+                          className="absolute inset-0 w-full h-full object-cover"
                           onError={e => { e.target.style.display = "none"; }}
                         />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
-                        <div className="absolute bottom-0 left-0 right-0 p-3">
-                          <div className="text-xs text-white/60 mb-0.5">{highlight.title}</div>
-                          <div className="font-bold text-white text-sm leading-tight">{highlight.area}</div>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/82 via-black/30 to-transparent" />
+                        {/* SOS badge */}
+                        <div className="absolute top-2.5 left-2.5 flex flex-col gap-1">
+                          <span className={`text-xs ${slideColor.bg} text-white px-2 py-0.5 rounded-full font-bold shadow-sm`}>{slideColor.label}</span>
                         </div>
+                        {/* SOS score badge */}
                         <div className="absolute top-2.5 right-2.5">
-                          <span className="text-xs bg-white/20 backdrop-blur-sm text-white/80 border border-white/30 px-2 py-0.5 rounded-full">{highlight.category}</span>
+                          <span className="text-xs bg-black/40 backdrop-blur-sm text-white/90 border border-white/20 px-2 py-0.5 rounded-full font-semibold">SOS {currentTown.sos_score}</span>
+                        </div>
+                        {/* Town name overlay */}
+                        <div className="absolute bottom-0 left-0 right-0 p-3">
+                          <div className="text-xs text-white/60 mb-0.5">{currentTown.prefecture}</div>
+                          <div className="font-bold text-white text-base leading-tight drop-shadow">{currentTown.name}</div>
                         </div>
                       </div>
-                      <div className="p-3.5 space-y-2">
-                        <p className="text-xs text-white/90 font-medium leading-snug">{highlight.catchcopy}</p>
-                        <p className="text-xs text-white/65 leading-relaxed">{highlight.description}</p>
-                        <div className="bg-red-500/20 border border-red-400/30 rounded-lg px-2.5 py-1.5">
-                          <div className="text-xs text-red-300 font-semibold mb-0.5">SOS</div>
-                          <p className="text-xs text-white/75 leading-snug">{highlight.sos}</p>
-                        </div>
+
+                      {/* Town info */}
+                      <div className="p-3.5 space-y-2.5">
+                        {currentTown.catchCopy && (
+                          <p className="text-xs text-white/90 font-medium leading-snug">{currentTown.catchCopy}</p>
+                        )}
+                        {currentTown.issueTags && currentTown.issueTags.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {currentTown.issueTags.slice(0, 3).map(tag => (
+                              <span key={tag} className="text-xs bg-white/15 border border-white/25 text-white/80 px-2 py-0.5 rounded-full">{tag}</span>
+                            ))}
+                          </div>
+                        )}
+                        {currentTown.sosSummary && (
+                          <div className="bg-red-500/20 border border-red-400/30 rounded-lg px-2.5 py-1.5">
+                            <div className="text-xs text-red-300 font-semibold mb-0.5">SOS</div>
+                            <p className="text-xs text-white/75 leading-snug line-clamp-2">{currentTown.sosSummary}</p>
+                          </div>
+                        )}
                         <button
-                          onClick={() => setSelectedTown(TOWNS.find(t => t.id === highlight.townId) || TOWNS[0])}
-                          className="mt-1 w-full text-xs bg-white/15 hover:bg-white/25 text-white border border-white/20 py-2 rounded-xl transition-colors font-medium"
+                          onClick={() => setSelectedTown(currentTown)}
+                          className="w-full text-xs bg-white/15 hover:bg-white/28 text-white border border-white/20 py-2 rounded-xl transition-colors font-medium"
                         >
-                          この地域を見る
+                          この地域のSOSを見る
                         </button>
                       </div>
                     </div>
