@@ -1,4 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
+import RoleSwitcher, { getRoleInfo } from "./components/RoleSwitcher";
+import MunicipalityDashboard from "./components/MunicipalityDashboard";
+import CompanyDashboard from "./components/CompanyDashboard";
+import AdminDashboard from "./components/AdminDashboard";
 
 // ============================================================
 // MOCK DATA
@@ -1579,6 +1583,8 @@ function EventsPage({ towns, userLoc }) {
 export default function MachiMatch() {
   const [page, setPage] = useState("map");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentRole, setCurrentRole] = useState("general");
+  const [isVerifiedCompany, setIsVerifiedCompany] = useState(false);
   const [user] = useState(MOCK_USER);
   const [userLoc, setUserLoc] = useState(null);
   const [gpsLoading, setGpsLoading] = useState(false);
@@ -1621,17 +1627,36 @@ export default function MachiMatch() {
   if (sortBy === "score") towns.sort((a, b) => b.sos_score - a.sos_score);
   else if (sortBy === "dist" && userLoc) towns.sort((a, b) => haversine(userLoc.lat,userLoc.lng,a.lat,a.lng) - haversine(userLoc.lat,userLoc.lng,b.lat,b.lng));
 
-  const navItems = [
-    { id: "map", icon: "🗾", label: "マップ" },
-    { id: "events", icon: "🎆", label: "イベント" },
-    { id: "ai", icon: "🗺️", label: "地域探し" },
-    { id: "mypage", icon: "👤", label: "マイページ" },
-  ];
+  const roleDashboardNav =
+    currentRole === "municipality" ? { id: "dashboard", icon: "🏛️", label: "自治体管理" }
+    : currentRole === "company" ? { id: "dashboard", icon: "🏢", label: "企業DB" }
+    : { id: "dashboard", icon: "⚙️", label: "管理画面" };
+  const navItems = currentRole === "general"
+    ? [
+        { id: "map", icon: "🗾", label: "マップ" },
+        { id: "events", icon: "🎆", label: "イベント" },
+        { id: "ai", icon: "🗺️", label: "地域探し" },
+        { id: "mypage", icon: "👤", label: "マイページ" },
+      ]
+    : [
+        { id: "map", icon: "🗾", label: "マップ" },
+        { id: "events", icon: "🎆", label: "イベント" },
+        { id: "ai", icon: "🗺️", label: "地域探し" },
+        roleDashboardNav,
+      ];
 
   const urgentCount = TOWNS.filter(t => t.sos_score >= 90).length;
   const totalJobs = TOWNS.reduce((acc, t) => acc + t.jobs.length, 0);
 
   const [currentSlide, setCurrentSlide] = useState(0);
+
+  useEffect(() => {
+    if (currentRole === "general") {
+      if (page === "dashboard") setPage("map");
+    } else {
+      if (page === "mypage") setPage("map");
+    }
+  }, [currentRole]);
 
   useEffect(() => {
     if (!TOWNS.length) return;
@@ -1663,6 +1688,7 @@ export default function MachiMatch() {
             >
               {gpsLoading ? "取得中..." : userLoc ? "GPS ON" : "現在地"}
             </button>
+            <RoleSwitcher currentRole={currentRole} onChange={setCurrentRole} />
             <button
               onClick={() => setIsLoggedIn(p => !p)}
               className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${isLoggedIn ? "bg-indigo-600 text-white border-indigo-600" : "border-gray-200 text-gray-500 hover:border-indigo-300"}`}
@@ -1679,6 +1705,16 @@ export default function MachiMatch() {
           現在地：{userLoc.label} から距離表示中
         </div>
       )}
+
+      {/* Role banner */}
+      {currentRole !== "general" && (() => {
+        const ri = getRoleInfo(currentRole);
+        return (
+          <div className={`border-b px-4 py-2 text-xs font-semibold text-center ${ri.badge}`}>
+            {ri.emoji} {ri.label} モードで表示中 — 右上のロール切替ボタンで変更できます
+          </div>
+        );
+      })()}
 
       {/* MAIN */}
       <main className="flex-1 pb-20">
@@ -1923,6 +1959,21 @@ export default function MachiMatch() {
 
         {page === "events" && <EventsPage towns={TOWNS} userLoc={userLoc} />}
         {page === "ai" && <AIRecommendPage towns={TOWNS} user={user} userLoc={userLoc} />}
+
+        {/* Role-specific dashboards */}
+        {page === "dashboard" && currentRole === "municipality" && (
+          <MunicipalityDashboard towns={TOWNS} />
+        )}
+        {page === "dashboard" && currentRole === "company" && (
+          <CompanyDashboard
+            isVerifiedCompany={isVerifiedCompany}
+            onVerifyToggle={() => setIsVerifiedCompany(p => !p)}
+          />
+        )}
+        {page === "dashboard" && currentRole === "admin" && (
+          <AdminDashboard towns={TOWNS} />
+        )}
+
         {page === "mypage" && (
           isLoggedIn
             ? <MyPage user={user} towns={TOWNS} favorites={favorites} onToggleFav={toggleFav} />
