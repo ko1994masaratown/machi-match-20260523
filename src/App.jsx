@@ -1654,7 +1654,7 @@ export default function MachiMatch() {
     if (currentRole === "general") {
       if (page === "dashboard") setPage("map");
     } else {
-      if (page === "mypage") setPage("map");
+      setPage("dashboard");
     }
   }, [currentRole]);
 
