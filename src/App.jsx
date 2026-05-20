@@ -1,8 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { matchRegions } from "./services/matchService";
 import RoleSwitcher, { getRoleInfo } from "./components/RoleSwitcher";
 import MunicipalityDashboard from "./components/MunicipalityDashboard";
 import CompanyDashboard from "./components/CompanyDashboard";
 import AdminDashboard from "./components/AdminDashboard";
+import DartsModal from "./components/DartsModal";
+import MatchCelebration from "./components/MatchCelebration";
 
 // ============================================================
 // MOCK DATA
@@ -1256,125 +1259,433 @@ function TownDetail({ town, userLoc, favorites, onToggleFav, onClose, isLoggedIn
 }
 
 // ============================================================
-// AI RECOMMENDATION
+// INLINE DARTS PANEL (used inside AIRecommendPage right column)
 // ============================================================
-function AIRecommendPage({ towns, user, userLoc }) {
-  const [skills, setSkills] = useState(user.skills.join("、"));
-  const [style, setStyle] = useState("spot");
-  const [result, setResult] = useState("");
-  const [loading, setLoading] = useState(false);
+// ── Google Maps / OSM プレビュー ──────────────────────────────
+function GoogleMapPreview({ lat, lng, name, prefecture }) {
+  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
-  const SKILL_TAGS = ["IT・DX支援", "英語", "農業", "介護", "教育", "観光ガイド", "SNS運用", "料理", "医療"];
-
-  function toggleSkill(skill) {
-    setSkills(prev => {
-      const list = prev.split(/[、,]/).map(v => v.trim()).filter(Boolean);
-      const next = list.includes(skill) ? list.filter(v => v !== skill) : [...list, skill];
-      return next.join("、");
-    });
+  if (apiKey) {
+    const src = `https://www.google.com/maps/embed/v1/view?key=${apiKey}&center=${lat},${lng}&zoom=13&maptype=roadmap&language=ja`;
+    return (
+      <iframe
+        src={src}
+        title={`${prefecture}${name}の地図`}
+        className="w-full rounded-xl"
+        style={{ height: "260px", border: "none" }}
+        allowFullScreen
+        loading="lazy"
+      />
+    );
   }
 
-  async function recommend() {
-    setLoading(true);
-    setResult("");
-    const distInfo = userLoc
-      ? towns.map(t => `${t.prefecture}${t.name}(距離${haversine(userLoc.lat,userLoc.lng,t.lat,t.lng).toFixed(0)}km,SOS${t.sos_score})`).join("、")
-      : towns.map(t => `${t.prefecture}${t.name}(SOS${t.sos_score})`).join("、");
-    const prompt = `あなたは地方移住・支援マッチングAIです。以下のユーザーに最適な自治体を3つ推薦し、それぞれ理由を2〜3文で説明してください。必ず実際の自治体名を使ってください。\n\nスキル：${skills}\n関わり方の希望：${PERIOD_LABELS[style]}\n出身地：${user.hometown}\n\n候補自治体：${distInfo}\n\n出力形式：\n1. [自治体名]\n理由：〜\n\n2. [自治体名]\n理由：〜\n\n3. [自治体名]\n理由：〜`;
-    const ranked = [...towns]
-      .map(t => ({ ...t, dist: userLoc ? haversine(userLoc.lat, userLoc.lng, t.lat, t.lng) : null }))
-      .sort((a, b) => {
-        const homeBoostA = user.hometown && a.prefecture === user.hometown ? 20 : 0;
-        const homeBoostB = user.hometown && b.prefecture === user.hometown ? 20 : 0;
-        const scoreA = a.sos_score + homeBoostA - (a.dist ? a.dist / 80 : 0);
-        const scoreB = b.sos_score + homeBoostB - (b.dist ? b.dist / 80 : 0);
-        return scoreB - scoreA;
-      })
-      .slice(0, 3);
-    const fallback = ranked.map((t, i) => `${i + 1}. ${t.prefecture}${t.name}\n理由：${t.issues[0]}の支援ニーズが高く、${skills.split("、")[0] || "あなたのスキル"}を活かしやすい町です。${t.gifts?.[0] ? `活動後には「${t.gifts[0].name}」のような返礼品もあり、` : ""}まずは${PERIOD_LABELS[style]}から関われます。`).join("\n\n");
-    setResult(await generateWithClaude(prompt, fallback));
-    setLoading(false);
-  }
+  // APIキー未設定 → OpenStreetMap iframe（無料・キー不要）
+  // iframe を表示高より 36px 背高にしてコンテナでクリップ → OSM フッターバーを隠す
+  const m = 0.09;
+  const bbox = `${(lng - m).toFixed(4)},${(lat - m).toFixed(4)},${(lng + m).toFixed(4)},${(lat + m).toFixed(4)}`;
+  const osmSrc = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`;
+  return (
+    <div className="relative rounded-xl border border-gray-200" style={{ height: "260px", overflow: "hidden" }}>
+      <iframe
+        src={osmSrc}
+        title={`${prefecture}${name}の地図`}
+        className="w-full absolute top-0 left-0"
+        style={{ height: "296px", border: "none" }}
+        loading="lazy"
+      />
+      {/* 最低限の帰属表示（OSM ライセンス準拠） */}
+      <a
+        href={`https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=13/${lat}/${lng}`}
+        target="_blank"
+        rel="noreferrer"
+        className="absolute bottom-1.5 right-2 text-[10px] text-gray-400 bg-white/80 px-1.5 py-0.5 rounded hover:underline z-10"
+      >
+        © OpenStreetMap
+      </a>
+    </div>
+  );
+}
 
-  const skillList = skills.split(/[、,]/).map(v => v.trim()).filter(Boolean);
+// ── ダーツの旅 + マップパネル ──────────────────────────────────
+const DART_PHRASES = ["えいっ！🎯", "運命の地へ…", "どこへ飛ぶかな？", "今日のご縁は…！", "全国から選出中…"];
+
+function DartsWithMapPanel({ towns, onSelectTown }) {
+  const [phase, setPhase] = useState("idle"); // idle | throwing | revealed
+  const [chosenTown, setChosenTown] = useState(null);
+  const [phrase, setPhrase] = useState(DART_PHRASES[0]);
+
+  function throwDart() {
+    if (phase === "throwing") return;
+    const town = towns[Math.floor(Math.random() * towns.length)];
+    setChosenTown(town);
+    setPhrase(DART_PHRASES[Math.floor(Math.random() * DART_PHRASES.length)]);
+    setPhase("throwing");
+    setTimeout(() => setPhase("revealed"), 1400);
+  }
 
   return (
-    <div className="w-full px-4 sm:px-6 lg:px-8 py-6 max-w-5xl mx-auto">
-      {/* Page header */}
-      <div className="mb-6">
-        <div className="text-xs font-semibold text-indigo-600 uppercase tracking-wider mb-1">地域マッチング</div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-1">自分に合う地域を見つける</h2>
-        <p className="text-sm text-gray-500 leading-relaxed">興味・スキル・現在地から、関われる地域を提案します。</p>
+    <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+      {/* ヘッダー */}
+      <div className="bg-gradient-to-r from-amber-400 via-orange-400 to-rose-400 px-5 py-4">
+        <div className="flex items-start gap-3">
+          <span className="text-3xl mt-0.5">🎯</span>
+          <div>
+            <div className="text-white font-black text-base leading-snug tracking-wide">ダーツの旅で地域と出会う</div>
+            <div className="text-white/90 text-sm font-medium mt-1 leading-relaxed">偶然出会ったまちから、ワクワクが始まる。</div>
+          </div>
+        </div>
       </div>
 
-      <div className="space-y-5">
-        {/* Step 1: Skills */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold flex-shrink-0">1</div>
-            <label className="text-sm font-semibold text-gray-800">あなたのスキル・得意なこと</label>
-          </div>
-          <div className="flex flex-wrap gap-2 mb-3">
-            {SKILL_TAGS.map(s => {
-              const active = skillList.includes(s);
-              return (
-                <button
-                  key={s}
-                  onClick={() => toggleSkill(s)}
-                  className={`text-xs px-3.5 py-1.5 rounded-full border font-medium transition-all ${active ? "bg-indigo-600 text-white border-indigo-600 shadow-sm" : "border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600"}`}
-                >
-                  {s}
-                </button>
-              );
-            })}
-          </div>
-          <input
-            value={skills}
-            onChange={e => setSkills(e.target.value)}
-            placeholder="その他のスキルを自由入力"
-            className="w-full text-sm border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all"
-          />
-        </div>
+      <div className="p-4 space-y-3">
 
-        {/* Step 2: Style */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold flex-shrink-0">2</div>
-            <label className="text-sm font-semibold text-gray-800">関わり方の希望</label>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {Object.entries(PERIOD_LABELS).map(([k, v]) => (
-              <button
-                key={k}
-                onClick={() => setStyle(k)}
-                className={`text-xs py-2.5 rounded-xl border font-medium transition-all ${style === k ? "bg-indigo-600 text-white border-indigo-600 shadow-sm" : "border-gray-200 text-gray-500 hover:border-indigo-300"}`}
-              >
-                {v}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* CTA */}
-        <button
-          onClick={recommend}
-          disabled={loading}
-          className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-4 rounded-2xl font-semibold hover:opacity-90 disabled:opacity-50 transition-all shadow-md hover:shadow-lg text-sm"
-        >
-          {loading ? "分析中…" : "自分に合う地域を見つける"}
-        </button>
-
-        {/* Results */}
-        {result && (
-          <div className="bg-white border border-indigo-100 rounded-2xl overflow-hidden shadow-sm">
-            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-3">
-              <div className="text-xs font-semibold text-white/80 uppercase tracking-wider">あなたにおすすめの地域</div>
+        {/* Idle */}
+        {phase === "idle" && (
+          <>
+            <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-6 text-center border border-orange-100">
+              <div className="text-5xl mb-3">🗾</div>
+              <div className="text-sm font-bold text-orange-800 mb-1">どの地域と出会う？</div>
+              <div className="text-xs text-orange-600 leading-relaxed">
+                ボタンを押すと全国の自治体からランダムに<br/>1か所を選び、実際の地図で表示します。
+              </div>
             </div>
-            <div className="p-5">
-              <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{result}</p>
+            <button
+              onClick={throwDart}
+              className="w-full bg-gradient-to-r from-orange-500 to-rose-500 text-white font-bold py-3.5 rounded-xl text-sm hover:opacity-90 transition-all shadow-md"
+            >
+              🎯 ダーツを投げる
+            </button>
+          </>
+        )}
+
+        {/* Throwing animation */}
+        {phase === "throwing" && (
+          <div className="bg-orange-50 rounded-2xl border border-orange-100 flex flex-col items-center justify-center gap-3 py-10">
+            <div className="text-5xl animate-bounce">🎯</div>
+            <div className="text-base font-bold text-orange-700">{phrase}</div>
+            <div className="flex gap-1.5 mt-1">
+              {[0, 1, 2].map(i => (
+                <div
+                  key={i}
+                  className="w-2 h-2 rounded-full bg-orange-400 animate-bounce"
+                  style={{ animationDelay: `${i * 0.18}s` }}
+                />
+              ))}
             </div>
           </div>
         )}
+
+        {/* Revealed: map + card + buttons */}
+        {phase === "revealed" && chosenTown && (
+          <div className="space-y-3 animate-fade-in">
+            {/* 結果ラベル */}
+            <div className="text-center">
+              <div className="text-xs font-semibold text-orange-500 uppercase tracking-widest mb-0.5">今回の旅先は…</div>
+              <div className="text-2xl font-black text-gray-900">{chosenTown.prefecture} {chosenTown.name}</div>
+            </div>
+
+            {/* Google Map / OSM */}
+            <GoogleMapPreview
+              lat={chosenTown.lat}
+              lng={chosenTown.lng}
+              name={chosenTown.name}
+              prefecture={chosenTown.prefecture}
+            />
+
+            {/* 地域情報カード */}
+            <div className="bg-orange-50 border border-orange-100 rounded-xl p-3">
+              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                <span className="text-xs font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">SOS {chosenTown.sos_score}</span>
+                <span className="text-xs text-gray-500">高齢化率 {chosenTown.aging_rate}%</span>
+                <span className="text-xs text-gray-500">人口 {chosenTown.population?.toLocaleString()}人</span>
+              </div>
+              <p className="text-xs text-gray-700 leading-relaxed line-clamp-2">{chosenTown.catchCopy}</p>
+            </div>
+
+            {/* アクションボタン */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => onSelectTown && onSelectTown(chosenTown)}
+                className="flex-1 bg-gradient-to-r from-orange-500 to-rose-500 text-white text-xs font-bold py-2.5 rounded-xl hover:opacity-90 transition-opacity shadow-sm"
+              >
+                詳細を見る →
+              </button>
+              <button
+                onClick={() => onSelectTown && onSelectTown(chosenTown)}
+                className="flex-1 bg-white border-2 border-orange-300 text-orange-700 text-xs font-bold py-2.5 rounded-xl hover:bg-orange-50 transition-colors"
+              >
+                SOSを見る 🆘
+              </button>
+            </div>
+
+            {/* Google Mapsで開くリンク */}
+            <a
+              href={`https://www.google.com/maps?q=${chosenTown.lat},${chosenTown.lng}`}
+              target="_blank"
+              rel="noreferrer"
+              className="block text-center text-xs text-gray-400 hover:text-indigo-600 transition-colors"
+            >
+              Google Maps で開く ↗
+            </a>
+
+            <button
+              onClick={throwDart}
+              className="w-full text-xs text-orange-600 border border-orange-200 py-2.5 rounded-xl hover:bg-orange-50 font-semibold transition-colors"
+            >
+              🎯 もう一回ダーツを投げる
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// AI RECOMMENDATION
+// ============================================================
+const THEME_OPTIONS = ["農業・食", "観光・交流", "IT・DX", "教育・子育て", "医療・福祉", "自然・環境", "伝統工芸", "移住定住", "企業誘致"];
+const SKILL_OPTIONS = ["IT・DX支援", "英語・多言語", "農業", "介護・福祉", "教育", "観光ガイド", "SNS・広報", "料理・加工", "医療", "建築・土木", "経営・経営企画"];
+const IMAGE_OPTIONS = ["海・漁村", "山・農村", "都市近郊", "離島", "温泉地", "雪国", "古民家", "自然豊か", "コンパクト"];
+const INVOLVEMENT_OPTIONS = [
+  { key: "移住したい",        label: "移住したい",        emoji: "🏡", sub: "定住・就職" },
+  { key: "副業で関わりたい",   label: "副業で関わりたい",   emoji: "💼", sub: "リモート可" },
+  { key: "ボランティアしたい", label: "ボランティア",      emoji: "🤝", sub: "短期・無償" },
+  { key: "旅行から始めたい",   label: "旅行から始めたい",   emoji: "✈️", sub: "まず体験" },
+  { key: "企業として支援したい", label: "企業支援",        emoji: "🏢", sub: "CSR・連携" },
+];
+
+function TagSelector({ options, selected, onToggle }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map(opt => {
+        const active = selected.includes(opt);
+        return (
+          <button
+            key={opt}
+            onClick={() => onToggle(opt)}
+            className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${active ? "bg-indigo-600 text-white border-indigo-600 shadow-sm scale-105" : "border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600 bg-white"}`}
+          >
+            {opt}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function toggleTag(list, tag) {
+  return list.includes(tag) ? list.filter(t => t !== tag) : [...list, tag];
+}
+
+function MatchResultCard({ result, resultTown, onSelectTown }) {
+  return (
+    <div className="bg-white border border-indigo-100 rounded-2xl overflow-hidden shadow-md animate-fade-in">
+      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-white text-base">✨</span>
+          <div className="text-sm font-bold text-white">AIマッチング結果</div>
+        </div>
+        <span className="text-xs text-indigo-200 bg-indigo-700/50 px-2 py-0.5 rounded-full">{result.source}</span>
+      </div>
+      <div className="p-5 space-y-4">
+        {/* Region name + score */}
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-xs text-gray-400 mb-0.5">おすすめ地域</div>
+            <div className="text-xl font-bold text-gray-900">{result.recommendedRegion}</div>
+          </div>
+          <div className="flex-shrink-0 text-center">
+            <div className="text-3xl font-extrabold text-indigo-600">{result.matchScore}<span className="text-lg">%</span></div>
+            <div className="text-xs text-gray-400">マッチ度</div>
+          </div>
+        </div>
+
+        {/* Match type badge */}
+        <div>
+          <span className="text-xs bg-indigo-50 text-indigo-700 font-semibold px-3 py-1 rounded-full border border-indigo-100">{result.matchType}</span>
+        </div>
+
+        {/* Reason */}
+        <div>
+          <div className="text-xs font-semibold text-gray-500 mb-1">おすすめ理由</div>
+          <p className="text-sm text-gray-700 leading-relaxed">{result.reason}</p>
+        </div>
+
+        {/* SOS issue */}
+        <div className="bg-red-50 rounded-xl px-4 py-3 border border-red-100">
+          <div className="text-xs font-semibold text-red-500 mb-0.5">この地域のSOS課題</div>
+          <p className="text-sm text-red-700 font-medium">{result.sosIssue}</p>
+        </div>
+
+        {/* First action */}
+        <div className="bg-green-50 rounded-xl px-4 py-3 border border-green-100">
+          <div className="text-xs font-semibold text-green-600 mb-0.5">最初の関わり方</div>
+          <p className="text-sm text-green-800">{result.firstAction}</p>
+        </div>
+
+        {/* Detail button */}
+        {resultTown && (
+          <button
+            onClick={() => onSelectTown(resultTown)}
+            className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all text-sm"
+          >
+            この地域の詳細を見る →
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AIRecommendPage({ towns, onSelectTown }) {
+  const [themes, setThemes] = useState([]);
+  const [involvement, setInvolvement] = useState("");
+  const [skills, setSkills] = useState([]);
+  const [regionImage, setRegionImage] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [showResult, setShowResult] = useState(false);
+
+  const resultTown = result
+    ? towns.find(t => result.recommendedRegion.includes(t.name)) ?? null
+    : null;
+
+  async function recommend() {
+    setLoading(true);
+    setResult(null);
+    setError("");
+    setShowResult(false);
+    setShowCelebration(false);
+    try {
+      const userInput = { themes, involvement, skills, regionImage };
+      const res = await matchRegions(userInput, towns);
+      setResult(res);
+      setShowCelebration(true);
+    } catch (err) {
+      setError("推薦に失敗しました。もう一度お試しください。");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const handleCelebrationDismiss = useCallback(() => {
+    setShowCelebration(false);
+    setShowResult(true);
+  }, []);
+
+  return (
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-6">
+      {/* Match celebration overlay */}
+      {showCelebration && result && (
+        <MatchCelebration
+          regionName={resultTown?.name ?? result.recommendedRegion}
+          prefecture={resultTown?.prefecture ?? ""}
+          matchScore={result.matchScore}
+          imageUrl={resultTown?.imageUrl ?? null}
+          onDismiss={handleCelebrationDismiss}
+        />
+      )}
+
+      {/* Page header */}
+      <div className="mb-6">
+        <div className="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-1">✨ Machi Match</div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-1">あなたに合う地域をAIで見つける</h2>
+        <p className="text-sm text-gray-500 leading-relaxed">価値観・スキル・関心から、相性のよいまちを提案します。</p>
+      </div>
+
+      {/* 2-col layout on lg+ */}
+      <div className="lg:grid lg:grid-cols-5 lg:gap-6 lg:items-start space-y-5 lg:space-y-0">
+
+        {/* LEFT: form (3/5) */}
+        <div className="lg:col-span-3 space-y-4">
+
+          {/* Step 1: 興味テーマ */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-7 h-7 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold flex-shrink-0">1</div>
+              <label className="text-sm font-semibold text-gray-800">興味のあるテーマ <span className="text-gray-400 font-normal">（複数選択可）</span></label>
+            </div>
+            <TagSelector options={THEME_OPTIONS} selected={themes} onToggle={t => setThemes(prev => toggleTag(prev, t))} />
+          </div>
+
+          {/* Step 2: 関わり方 */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-7 h-7 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold flex-shrink-0">2</div>
+              <label className="text-sm font-semibold text-gray-800">関わり方</label>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {INVOLVEMENT_OPTIONS.map(({ key, label, emoji, sub }) => (
+                <button
+                  key={key}
+                  onClick={() => setInvolvement(key)}
+                  className={`py-3 px-3 rounded-xl border font-semibold transition-all text-center ${involvement === key ? "bg-indigo-600 text-white border-indigo-600 shadow-sm" : "border-gray-200 text-gray-600 hover:border-indigo-300 hover:bg-indigo-50 bg-white"}`}
+                >
+                  <div className="text-lg mb-0.5">{emoji}</div>
+                  <div className="text-xs font-bold">{label}</div>
+                  <div className={`text-xs mt-0.5 ${involvement === key ? "text-indigo-200" : "text-gray-400"}`}>{sub}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Step 3: スキル */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-7 h-7 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold flex-shrink-0">3</div>
+              <label className="text-sm font-semibold text-gray-800">あなたのスキル <span className="text-gray-400 font-normal">（複数選択可）</span></label>
+            </div>
+            <TagSelector options={SKILL_OPTIONS} selected={skills} onToggle={s => setSkills(prev => toggleTag(prev, s))} />
+          </div>
+
+          {/* Step 4: 地域イメージ */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-7 h-7 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold flex-shrink-0">4</div>
+              <label className="text-sm font-semibold text-gray-800">希望する地域イメージ <span className="text-gray-400 font-normal">（複数選択可）</span></label>
+            </div>
+            <TagSelector options={IMAGE_OPTIONS} selected={regionImage} onToggle={img => setRegionImage(prev => toggleTag(prev, img))} />
+          </div>
+
+          {/* CTA */}
+          <button
+            onClick={recommend}
+            disabled={loading}
+            className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-4 rounded-2xl font-bold hover:opacity-90 disabled:opacity-50 transition-all shadow-lg hover:shadow-xl text-base relative overflow-hidden"
+          >
+            {loading
+              ? <span className="flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin inline-block"/>
+                  AIがあなたに合う地域を診断しています...
+                </span>
+              : <span className="flex items-center justify-center gap-2">
+                  <span>✨</span>
+                  <span>Machi Matchを始める</span>
+                </span>}
+          </button>
+          {!loading && (
+            <p className="text-center text-xs text-gray-400">
+              AI が価値観・スキル・関心を分析して、相性のよい地域を提案します
+            </p>
+          )}
+
+          {/* Error */}
+          {error && (
+            <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">{error}</div>
+          )}
+
+          {/* Result card — shown only after celebration dismisses */}
+          {result && showResult && (
+            <MatchResultCard result={result} resultTown={resultTown} onSelectTown={onSelectTown} />
+          )}
+        </div>
+
+        {/* RIGHT: ダーツの旅 + Google Map (2/5) */}
+        <div className="lg:col-span-2">
+          <DartsWithMapPanel towns={towns} onSelectTown={onSelectTown} />
+        </div>
       </div>
     </div>
   );
@@ -1595,8 +1906,7 @@ export default function MachiMatch() {
   const [onlyWithSpot, setOnlyWithSpot] = useState(false);
   const [onlyWithGift, setOnlyWithGift] = useState(false);
   const [travelFilter, setTravelFilter] = useState(0); // 0=off
-  const [dartPhase, setDartPhase] = useState(null); // null | "throwing" | "landed"
-  const [dartTown, setDartTown] = useState(null);
+  const [showDartsModal, setShowDartsModal] = useState(false);
 
   function toggleFav(id) {
     if (!isLoggedIn) { alert("お気に入りを保存するにはログインが必要です。"); return; }
@@ -1619,17 +1929,6 @@ export default function MachiMatch() {
     );
   }
 
-  function throwDart() {
-    const pool = TOWNS.filter(t => t.jobs.some(j => j.period === "spot") || t.events.some(e => e.has_staff_job) || t.gifts.length > 0);
-    const chosen = pool[Math.floor(Math.random() * pool.length)] || TOWNS[Math.floor(Math.random() * TOWNS.length)];
-    setDartPhase("throwing");
-    setDartTown(null);
-    setTimeout(() => {
-      setDartTown(chosen);
-      setDartPhase("landed");
-    }, 1800);
-  }
-
   let towns = [...TOWNS];
   if (search) towns = towns.filter(t => t.name.includes(search) || t.prefecture.includes(search) || t.issues.some(i => i.includes(search)) || t.strengths.some(s => s.includes(search)));
   if (periodFilter !== "all") towns = towns.filter(t => t.jobs.some(j => j.period === periodFilter));
@@ -1644,15 +1943,15 @@ export default function MachiMatch() {
     : { id: "dashboard", icon: "⚙️", label: "管理画面" };
   const navItems = currentRole === "general"
     ? [
-        { id: "map", icon: "🗾", label: "マップ" },
-        { id: "events", icon: "🎆", label: "イベント" },
-        { id: "ai", icon: "🗺️", label: "地域探し" },
+        { id: "map", icon: "🆘", label: "Machi Help" },
+        { id: "events", icon: "🎆", label: "Machi Event" },
+        { id: "ai", icon: "✨", label: "Machi Match" },
         { id: "mypage", icon: "👤", label: "マイページ" },
       ]
     : [
-        { id: "map", icon: "🗾", label: "マップ" },
-        { id: "events", icon: "🎆", label: "イベント" },
-        { id: "ai", icon: "🗺️", label: "地域探し" },
+        { id: "map", icon: "🆘", label: "Machi Help" },
+        { id: "events", icon: "🎆", label: "Machi Event" },
+        { id: "ai", icon: "✨", label: "Machi Match" },
         roleDashboardNav,
       ];
 
@@ -1737,13 +2036,13 @@ export default function MachiMatch() {
               <button
                 key={item.id}
                 onClick={() => setPage(item.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all mb-0.5 ${
+                className={`w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all mb-0.5 ${
                   page === item.id
                     ? "bg-indigo-50 text-indigo-700"
                     : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
                 }`}
               >
-                <span className="text-lg leading-none">{item.icon}</span>
+                <span className="w-7 flex-shrink-0 flex items-center justify-center text-base leading-none">{item.icon}</span>
                 <span>{item.label}</span>
               </button>
             ))}
@@ -1787,19 +2086,19 @@ export default function MachiMatch() {
 
                   {/* Left: main copy + CTA */}
                   <div className="flex-1 text-white">
-                    <div className="text-xs font-semibold text-white/55 uppercase tracking-widest mb-3">地域共創プラットフォーム</div>
+                    <div className="text-xs font-semibold text-white/55 uppercase tracking-widest mb-3">Machi Help —</div>
                     <h1 className="text-3xl sm:text-4xl lg:text-[2.75rem] font-bold leading-tight mb-4 drop-shadow-md">
-                      風景の奥に、<br/>まだ見えていない<br className="sm:hidden"/>SOSがある
+                      出かけよう。まちの声を聞きに。
                     </h1>
                     <p className="text-sm sm:text-base text-white/80 leading-relaxed mb-6 max-w-lg">
-                      助けを求める町と、力を活かしたい人をつなぐ。<br className="hidden sm:block"/>副業・ボランティア・移住・事業承継など、さまざまな形で関われます。
+                      あなたの一歩が、まちの力に
                     </p>
                     <div className="flex gap-3 flex-wrap mb-8">
                       <button
                         onClick={requestGPS}
                         className="bg-white text-gray-900 font-semibold text-sm px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors shadow-md"
                       >
-                        近くのSOSを見る
+                        近くのまちを見る
                       </button>
                       <button
                         onClick={() => setPage("ai")}
@@ -1829,7 +2128,7 @@ export default function MachiMatch() {
                     <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl overflow-hidden shadow-2xl">
                       {/* Card header with dot indicators */}
                       <div className="px-4 py-2.5 flex items-center justify-between border-b border-white/15">
-                        <div className="text-xs text-white/60 font-semibold uppercase tracking-wider">今日の地域アート</div>
+                        <div className="text-xs text-white/60 font-semibold uppercase tracking-wider">ピックアップ</div>
                         <div className="flex gap-1 items-center">
                           {TOWNS.map((_, i) => (
                             <button
@@ -1880,7 +2179,7 @@ export default function MachiMatch() {
                         )}
                         {currentTown.sosSummary && (
                           <div className="bg-red-500/20 border border-red-400/30 rounded-lg px-2.5 py-1.5">
-                            <div className="text-xs text-red-300 font-semibold mb-0.5">SOS</div>
+                            <div className="text-xs text-red-300 font-semibold mb-0.5">地域の困りごと</div>
                             <p className="text-xs text-white/75 leading-snug line-clamp-2">{currentTown.sosSummary}</p>
                           </div>
                         )}
@@ -1888,7 +2187,7 @@ export default function MachiMatch() {
                           onClick={() => setSelectedTown(currentTown)}
                           className="w-full text-xs bg-white/15 hover:bg-white/28 text-white border border-white/20 py-2 rounded-xl transition-colors font-medium"
                         >
-                          この地域のSOSを見る
+                          この地域の支援募集を見る
                         </button>
                       </div>
                     </div>
@@ -1897,10 +2196,6 @@ export default function MachiMatch() {
                 </div>
               </div>
 
-              {/* Day label bottom-right */}
-              <div className="absolute bottom-3 right-4 text-xs text-white/30 hidden sm:block">
-                {new Date().toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" })} の地域
-              </div>
             </div>
 
             {/* Search & filters */}
@@ -1971,117 +2266,6 @@ export default function MachiMatch() {
               </div>
             </div>
 
-            {/* ダーツの旅 banner */}
-            <div className="px-4 sm:px-6 lg:px-8 pb-2">
-              <div className="relative bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 rounded-2xl px-5 py-4 overflow-hidden shadow-md cursor-pointer hover:opacity-95 transition-opacity group" onClick={dartPhase === "throwing" ? undefined : throwDart}>
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_80%_50%,rgba(255,255,255,0.12),transparent)]" />
-                <div className="relative flex items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-base">🎯</span>
-                      <span className="text-xs font-bold text-white/80 uppercase tracking-wider">ダーツの旅</span>
-                    </div>
-                    <div className="font-bold text-white text-base leading-tight">どこへ行こうか迷ったら、えいっ！</div>
-                    <div className="text-xs text-white/70 mt-0.5">ランダムで地域を1つ選んでくれます</div>
-                  </div>
-                  <button
-                    onClick={e => { e.stopPropagation(); if (dartPhase !== "throwing") throwDart(); }}
-                    disabled={dartPhase === "throwing"}
-                    className="flex-shrink-0 bg-white text-orange-600 font-bold text-sm px-5 py-2.5 rounded-xl hover:bg-orange-50 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {dartPhase === "throwing" ? "🎯 飛んでる…" : "🎯 ダーツを投げる"}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* ダーツの旅 throwing animation */}
-            {dartPhase === "throwing" && (
-              <div className="px-4 sm:px-6 lg:px-8 pb-4 mt-1">
-                <div className="bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-orange-200 rounded-2xl p-8 text-center shadow-md">
-                  <div className="text-5xl mb-3 animate-dart inline-block">🎯</div>
-                  <div className="text-base font-bold text-orange-700 mb-1">ダーツ、飛んでます…！</div>
-                  <div className="text-sm text-orange-500">どの地域に刺さるかな？</div>
-                  <div className="flex justify-center gap-1 mt-4">
-                    {[0,1,2].map(i => (
-                      <div key={i} className="w-2 h-2 bg-orange-400 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ダーツの旅 result */}
-            {dartPhase === "landed" && dartTown && (
-              <div className="px-4 sm:px-6 lg:px-8 pb-4 mt-1">
-                <div className="relative bg-white border-2 border-orange-300 rounded-2xl overflow-hidden shadow-lg animate-bounce-in">
-                  {/* Header strip */}
-                  <div className="bg-gradient-to-r from-orange-500 to-rose-500 px-5 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-white text-lg">🎯</span>
-                      <div>
-                        <div className="text-xs font-semibold text-white/80">ダーツが刺さった！</div>
-                        <div className="text-white font-bold text-base">{dartTown.prefecture} {dartTown.name}</div>
-                      </div>
-                    </div>
-                    <button onClick={() => setDartPhase(null)} className="text-white/70 hover:text-white text-xl leading-none">✕</button>
-                  </div>
-                  <div className="flex flex-col sm:flex-row">
-                    {/* Town image */}
-                    <div className="relative sm:w-56 h-40 sm:h-auto flex-shrink-0 overflow-hidden">
-                      <div className="absolute inset-0 bg-gradient-to-br from-orange-700 to-rose-600" />
-                      {dartTown.imageUrl && (
-                        <img src={dartTown.imageUrl} alt={dartTown.name} className="absolute inset-0 w-full h-full object-cover" onError={e => { e.target.style.display = "none"; }} />
-                      )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                      <div className="absolute bottom-3 left-3 text-white">
-                        <div className="text-xs text-white/70">{dartTown.prefecture}</div>
-                        <div className="text-lg font-bold drop-shadow">{dartTown.name}</div>
-                      </div>
-                    </div>
-                    {/* Info */}
-                    <div className="p-4 flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xs font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">SOS {dartTown.sos_score}</span>
-                        <span className="text-xs text-gray-500">高齢化率 {dartTown.aging_rate}%</span>
-                      </div>
-                      <p className="text-sm text-gray-700 leading-relaxed mb-3">{dartTown.catchCopy}</p>
-                      {/* Spot activities */}
-                      <div className="space-y-1.5 mb-4">
-                        {dartTown.jobs.filter(j => j.period === "spot").slice(0,2).map(j => (
-                          <div key={j.id} className="flex items-center gap-2 text-xs text-gray-600 bg-orange-50 border border-orange-100 rounded-lg px-2.5 py-1.5">
-                            <span>💼</span>
-                            <span>{j.title}</span>
-                            {typeof j.pay === "number" && <span className="ml-auto font-semibold text-orange-700">日給¥{j.pay.toLocaleString()}</span>}
-                          </div>
-                        ))}
-                        {dartTown.events.filter(e => e.has_staff_job).slice(0,1).map(e => (
-                          <div key={e.id} className="flex items-center gap-2 text-xs text-gray-600 bg-emerald-50 border border-emerald-100 rounded-lg px-2.5 py-1.5">
-                            <span>🎉</span>
-                            <span>{e.title}</span>
-                            <span className="ml-auto text-emerald-600 font-medium">スタッフ募集</span>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => { setSelectedTown(dartTown); setDartPhase(null); }}
-                          className="flex-1 bg-orange-500 text-white text-xs font-bold py-2.5 rounded-xl hover:bg-orange-600 transition-colors"
-                        >
-                          この地域を見る →
-                        </button>
-                        <button
-                          onClick={throwDart}
-                          className="text-xs border border-orange-300 text-orange-600 font-medium px-4 py-2.5 rounded-xl hover:bg-orange-50 transition-colors"
-                        >
-                          もう一回
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Town grid */}
             <div className="px-4 sm:px-6 lg:px-8 pb-6">
@@ -2107,7 +2291,7 @@ export default function MachiMatch() {
         )}
 
         {page === "events" && <EventsPage towns={TOWNS} userLoc={userLoc} />}
-        {page === "ai" && <AIRecommendPage towns={TOWNS} user={user} userLoc={userLoc} />}
+        {page === "ai" && <AIRecommendPage towns={TOWNS} onSelectTown={setSelectedTown} />}
 
         {/* Role-specific dashboards */}
         {page === "dashboard" && currentRole === "municipality" && (
@@ -2167,6 +2351,15 @@ export default function MachiMatch() {
           onToggleFav={toggleFav}
           onClose={() => setSelectedTown(null)}
           isLoggedIn={isLoggedIn}
+        />
+      )}
+
+      {/* DARTS MODAL */}
+      {showDartsModal && (
+        <DartsModal
+          towns={TOWNS}
+          onClose={() => setShowDartsModal(false)}
+          onSelectTown={(town) => { setSelectedTown(town); }}
         />
       )}
     </div>
