@@ -3,5 +3,5 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  base: '/machi-match-trial/',
+  base: '/machi-match-20260523/',
 })
