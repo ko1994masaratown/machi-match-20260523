@@ -67,7 +67,7 @@ export default function MunicipalityDashboard({ towns }) {
   ];
 
   return (
-    <div className="max-w-2xl lg:max-w-5xl mx-auto px-4 py-6">
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-6">
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-2 mb-2">

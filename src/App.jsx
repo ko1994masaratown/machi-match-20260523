@@ -1299,7 +1299,7 @@ function AIRecommendPage({ towns, user, userLoc }) {
   const skillList = skills.split(/[、,]/).map(v => v.trim()).filter(Boolean);
 
   return (
-    <div className="max-w-2xl lg:max-w-4xl mx-auto px-4 py-6">
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-6 max-w-5xl mx-auto">
       {/* Page header */}
       <div className="mb-6">
         <div className="text-xs font-semibold text-indigo-600 uppercase tracking-wider mb-1">地域マッチング</div>
@@ -1386,7 +1386,7 @@ function AIRecommendPage({ towns, user, userLoc }) {
 function MyPage({ user, towns, favorites, onToggleFav }) {
   const favTowns = towns.filter(t => favorites.includes(t.id));
   return (
-    <div className="max-w-2xl lg:max-w-4xl mx-auto px-4 py-6 space-y-5">
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-6 max-w-5xl mx-auto space-y-5">
       {/* Profile card */}
       <div className="relative bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-700 rounded-3xl p-5 text-white overflow-hidden">
         <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-10 translate-x-10" />
@@ -1505,7 +1505,7 @@ function EventsPage({ towns, userLoc }) {
   const staffEvents = allEvents.filter(e => e.has_staff_job).length;
 
   return (
-    <div className="max-w-2xl lg:max-w-5xl mx-auto px-4 py-6">
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-6">
       <div className="mb-5">
         <div className="text-xs font-semibold text-indigo-600 uppercase tracking-wider mb-1">全国イベント</div>
         <h2 className="text-2xl font-bold text-gray-900">地域のイベントに参加する</h2>
@@ -1530,7 +1530,7 @@ function EventsPage({ towns, userLoc }) {
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
         {filtered.map((evt, i) => {
           const ec = EVT_COLORS[evt.category] || EVT_COLORS.other;
           const df = formatDate(evt.date);
@@ -1592,10 +1592,11 @@ export default function MachiMatch() {
   const [selectedTown, setSelectedTown] = useState(null);
   const [search, setSearch] = useState("");
   const [periodFilter, setPeriodFilter] = useState("all");
-  const [sortBy, setSortBy] = useState("score");
   const [onlyWithSpot, setOnlyWithSpot] = useState(false);
   const [onlyWithGift, setOnlyWithGift] = useState(false);
   const [travelFilter, setTravelFilter] = useState(0); // 0=off
+  const [dartPhase, setDartPhase] = useState(null); // null | "throwing" | "landed"
+  const [dartTown, setDartTown] = useState(null);
 
   function toggleFav(id) {
     if (!isLoggedIn) { alert("お気に入りを保存するにはログインが必要です。"); return; }
@@ -1618,14 +1619,24 @@ export default function MachiMatch() {
     );
   }
 
+  function throwDart() {
+    const pool = TOWNS.filter(t => t.jobs.some(j => j.period === "spot") || t.events.some(e => e.has_staff_job) || t.gifts.length > 0);
+    const chosen = pool[Math.floor(Math.random() * pool.length)] || TOWNS[Math.floor(Math.random() * TOWNS.length)];
+    setDartPhase("throwing");
+    setDartTown(null);
+    setTimeout(() => {
+      setDartTown(chosen);
+      setDartPhase("landed");
+    }, 1800);
+  }
+
   let towns = [...TOWNS];
   if (search) towns = towns.filter(t => t.name.includes(search) || t.prefecture.includes(search) || t.issues.some(i => i.includes(search)) || t.strengths.some(s => s.includes(search)));
   if (periodFilter !== "all") towns = towns.filter(t => t.jobs.some(j => j.period === periodFilter));
   if (onlyWithSpot) towns = towns.filter(t => t.jobs.some(j => j.period === "spot"));
   if (onlyWithGift) towns = towns.filter(t => t.gifts.length > 0);
   if (travelFilter > 0 && userLoc) towns = towns.filter(t => haversine(userLoc.lat, userLoc.lng, t.lat, t.lng) / 80 <= travelFilter);
-  if (sortBy === "score") towns.sort((a, b) => b.sos_score - a.sos_score);
-  else if (sortBy === "dist" && userLoc) towns.sort((a, b) => haversine(userLoc.lat,userLoc.lng,a.lat,a.lng) - haversine(userLoc.lat,userLoc.lng,b.lat,b.lng));
+  towns.sort((a, b) => b.sos_score - a.sos_score);
 
   const roleDashboardNav =
     currentRole === "municipality" ? { id: "dashboard", icon: "🏛️", label: "自治体管理" }
@@ -1933,25 +1944,12 @@ export default function MachiMatch() {
                       〜{h}時間
                     </button>
                   ))}
-                  <div className="w-px bg-gray-200 flex-shrink-0 mx-1" />
-                  <button
-                    onClick={() => setSortBy("score")}
-                    className={`flex-shrink-0 text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${sortBy === "score" ? "bg-indigo-600 text-white border-indigo-600 shadow-sm" : "border-gray-200 text-gray-500 hover:border-indigo-300"}`}
-                  >
-                    SOS順
-                  </button>
-                  <button
-                    onClick={() => setSortBy("dist")}
-                    className={`flex-shrink-0 text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${sortBy === "dist" ? "bg-emerald-600 text-white border-emerald-600 shadow-sm" : "border-gray-200 text-gray-500 hover:border-emerald-300"}`}
-                  >
-                    距離順
-                  </button>
                 </div>
               </div>
             </div>
 
             {/* Emergency banner */}
-            <div className="max-w-7xl mx-auto px-4 pt-5">
+            <div className="px-4 sm:px-6 lg:px-8 pt-5">
               <div className="relative bg-gradient-to-r from-red-600 to-rose-500 text-white rounded-2xl px-5 py-4 mb-5 overflow-hidden shadow-md">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-8 translate-x-8" />
                 <div className="relative flex items-center justify-between gap-4">
@@ -1973,8 +1971,120 @@ export default function MachiMatch() {
               </div>
             </div>
 
+            {/* ダーツの旅 banner */}
+            <div className="px-4 sm:px-6 lg:px-8 pb-2">
+              <div className="relative bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 rounded-2xl px-5 py-4 overflow-hidden shadow-md cursor-pointer hover:opacity-95 transition-opacity group" onClick={dartPhase === "throwing" ? undefined : throwDart}>
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_80%_50%,rgba(255,255,255,0.12),transparent)]" />
+                <div className="relative flex items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-base">🎯</span>
+                      <span className="text-xs font-bold text-white/80 uppercase tracking-wider">ダーツの旅</span>
+                    </div>
+                    <div className="font-bold text-white text-base leading-tight">どこへ行こうか迷ったら、えいっ！</div>
+                    <div className="text-xs text-white/70 mt-0.5">ランダムで地域を1つ選んでくれます</div>
+                  </div>
+                  <button
+                    onClick={e => { e.stopPropagation(); if (dartPhase !== "throwing") throwDart(); }}
+                    disabled={dartPhase === "throwing"}
+                    className="flex-shrink-0 bg-white text-orange-600 font-bold text-sm px-5 py-2.5 rounded-xl hover:bg-orange-50 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {dartPhase === "throwing" ? "🎯 飛んでる…" : "🎯 ダーツを投げる"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* ダーツの旅 throwing animation */}
+            {dartPhase === "throwing" && (
+              <div className="px-4 sm:px-6 lg:px-8 pb-4 mt-1">
+                <div className="bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-orange-200 rounded-2xl p-8 text-center shadow-md">
+                  <div className="text-5xl mb-3 animate-dart inline-block">🎯</div>
+                  <div className="text-base font-bold text-orange-700 mb-1">ダーツ、飛んでます…！</div>
+                  <div className="text-sm text-orange-500">どの地域に刺さるかな？</div>
+                  <div className="flex justify-center gap-1 mt-4">
+                    {[0,1,2].map(i => (
+                      <div key={i} className="w-2 h-2 bg-orange-400 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ダーツの旅 result */}
+            {dartPhase === "landed" && dartTown && (
+              <div className="px-4 sm:px-6 lg:px-8 pb-4 mt-1">
+                <div className="relative bg-white border-2 border-orange-300 rounded-2xl overflow-hidden shadow-lg animate-bounce-in">
+                  {/* Header strip */}
+                  <div className="bg-gradient-to-r from-orange-500 to-rose-500 px-5 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-white text-lg">🎯</span>
+                      <div>
+                        <div className="text-xs font-semibold text-white/80">ダーツが刺さった！</div>
+                        <div className="text-white font-bold text-base">{dartTown.prefecture} {dartTown.name}</div>
+                      </div>
+                    </div>
+                    <button onClick={() => setDartPhase(null)} className="text-white/70 hover:text-white text-xl leading-none">✕</button>
+                  </div>
+                  <div className="flex flex-col sm:flex-row">
+                    {/* Town image */}
+                    <div className="relative sm:w-56 h-40 sm:h-auto flex-shrink-0 overflow-hidden">
+                      <div className="absolute inset-0 bg-gradient-to-br from-orange-700 to-rose-600" />
+                      {dartTown.imageUrl && (
+                        <img src={dartTown.imageUrl} alt={dartTown.name} className="absolute inset-0 w-full h-full object-cover" onError={e => { e.target.style.display = "none"; }} />
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                      <div className="absolute bottom-3 left-3 text-white">
+                        <div className="text-xs text-white/70">{dartTown.prefecture}</div>
+                        <div className="text-lg font-bold drop-shadow">{dartTown.name}</div>
+                      </div>
+                    </div>
+                    {/* Info */}
+                    <div className="p-4 flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xs font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">SOS {dartTown.sos_score}</span>
+                        <span className="text-xs text-gray-500">高齢化率 {dartTown.aging_rate}%</span>
+                      </div>
+                      <p className="text-sm text-gray-700 leading-relaxed mb-3">{dartTown.catchCopy}</p>
+                      {/* Spot activities */}
+                      <div className="space-y-1.5 mb-4">
+                        {dartTown.jobs.filter(j => j.period === "spot").slice(0,2).map(j => (
+                          <div key={j.id} className="flex items-center gap-2 text-xs text-gray-600 bg-orange-50 border border-orange-100 rounded-lg px-2.5 py-1.5">
+                            <span>💼</span>
+                            <span>{j.title}</span>
+                            {typeof j.pay === "number" && <span className="ml-auto font-semibold text-orange-700">日給¥{j.pay.toLocaleString()}</span>}
+                          </div>
+                        ))}
+                        {dartTown.events.filter(e => e.has_staff_job).slice(0,1).map(e => (
+                          <div key={e.id} className="flex items-center gap-2 text-xs text-gray-600 bg-emerald-50 border border-emerald-100 rounded-lg px-2.5 py-1.5">
+                            <span>🎉</span>
+                            <span>{e.title}</span>
+                            <span className="ml-auto text-emerald-600 font-medium">スタッフ募集</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => { setSelectedTown(dartTown); setDartPhase(null); }}
+                          className="flex-1 bg-orange-500 text-white text-xs font-bold py-2.5 rounded-xl hover:bg-orange-600 transition-colors"
+                        >
+                          この地域を見る →
+                        </button>
+                        <button
+                          onClick={throwDart}
+                          className="text-xs border border-orange-300 text-orange-600 font-medium px-4 py-2.5 rounded-xl hover:bg-orange-50 transition-colors"
+                        >
+                          もう一回
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Town grid */}
-            <div className="max-w-7xl mx-auto px-4 pb-6">
+            <div className="px-4 sm:px-6 lg:px-8 pb-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="text-sm font-semibold text-gray-700">{towns.length}自治体</div>
                 {search && <div className="text-xs text-gray-400">「{search}」の検索結果</div>}

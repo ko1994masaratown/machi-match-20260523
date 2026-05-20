@@ -111,7 +111,7 @@ export default function CompanyDashboard({ isVerifiedCompany, onVerifyToggle }) 
   ];
 
   return (
-    <div className="max-w-2xl lg:max-w-5xl mx-auto px-4 py-6">
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-6">
       {/* Header */}
       <div className="mb-5">
         <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -204,7 +204,7 @@ export default function CompanyDashboard({ isVerifiedCompany, onVerifyToggle }) 
 
       {/* ── M&A・事業承継 ── */}
       {activeTab === "ma" && (
-        <div className="space-y-3 lg:max-w-3xl">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {!isVerifiedCompany && (
             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-1">
               <div className="flex items-start gap-3">
@@ -279,7 +279,7 @@ export default function CompanyDashboard({ isVerifiedCompany, onVerifyToggle }) 
 
       {/* ── CSR・社会貢献 ── */}
       {activeTab === "csr" && (
-        <div className="space-y-3 lg:max-w-3xl">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-100 rounded-2xl p-4 mb-1">
             <p className="text-sm text-green-800 leading-relaxed">
               🌿 地域課題解決への参加は、企業のCSR・SDGs対応・従業員エンゲージメント向上にもつながります。

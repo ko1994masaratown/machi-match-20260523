@@ -37,7 +37,7 @@ export default function AdminDashboard({ towns }) {
   ];
 
   return (
-    <div className="max-w-2xl lg:max-w-5xl mx-auto px-4 py-6">
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-6">
       {/* Header */}
       <div className="mb-5">
         <div className="flex items-center gap-2 mb-2">
@@ -106,7 +106,7 @@ export default function AdminDashboard({ towns }) {
           </div>
 
           {/* Towns list */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 lg:max-w-2xl">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
             <div className="text-sm font-semibold text-gray-800 mb-3">
               参加自治体一覧（{towns.length}件）
             </div>
