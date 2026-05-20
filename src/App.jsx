@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { matchRegions } from "./services/matchService";
 import RoleSwitcher, { getRoleInfo } from "./components/RoleSwitcher";
 import MunicipalityDashboard from "./components/MunicipalityDashboard";
@@ -368,6 +369,25 @@ function formatDate(dateStr) {
   const d = new Date(dateStr);
   const days = ["日","月","火","水","木","金","土"];
   return { month: d.getMonth()+1, day: d.getDate(), dow: days[d.getDay()] };
+}
+
+function generateVisitPlan(town) {
+  return [
+    { time: "10:00", item: `${town.prefecture} ${town.name}に到着` },
+    { time: "11:00", item: town.issues[0] ? `地域課題「${town.issues[0]}」についてヒアリング` : "地域住民との交流" },
+    { time: "13:00", item: "昼食：地元の特産料理を楽しむ" },
+    { time: "14:30", item: town.strengths[0] ? `${town.strengths[0]}を体験・見学` : "地域名所を見学" },
+    { time: "16:00", item: "移住・支援相談窓口を訪問" },
+    { time: "17:30", item: "帰路へ" },
+  ];
+}
+
+function buildGoogleCalendarUrl(plan) {
+  const d = plan.date.replace(/-/g, "");
+  const start = `${d}T${plan.startTime.replace(":", "")}00`;
+  const end   = `${d}T${plan.endTime.replace(":", "")}00`;
+  const details = "Machi Match 訪問プラン\n\n" + plan.planItems.map(p => `${p.time}　${p.item}`).join("\n");
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(plan.title)}&dates=${start}/${end}&details=${encodeURIComponent(details)}&location=${encodeURIComponent(plan.location)}`;
 }
 
 // ============================================================
@@ -847,14 +867,103 @@ function IndustryPartnersTab({ town }) {
 }
 
 // ============================================================
+// VISIT PLAN MODAL
+// ============================================================
+function VisitPlanModal({ town, onConfirm, onClose }) {
+  const defaultDate = new Date();
+  defaultDate.setDate(defaultDate.getDate() + 7);
+  const [date, setDate] = useState(defaultDate.toISOString().split("T")[0]);
+  const planItems = generateVisitPlan(town);
+
+  function handleConfirm() {
+    const plan = {
+      id: Date.now().toString(),
+      townId: town.id,
+      townName: town.name,
+      prefecture: town.prefecture,
+      imageUrl: town.imageUrl ?? null,
+      title: `Machi Match：${town.prefecture} ${town.name} 訪問プラン`,
+      date,
+      startTime: "10:00",
+      endTime: "18:00",
+      location: `${town.prefecture} ${town.name}`,
+      purpose: "観光・地域課題ヒアリング・移住相談",
+      planItems,
+      status: "confirmed",
+      addedToGoogleCalendar: false,
+    };
+    plan.googleCalendarUrl = buildGoogleCalendarUrl(plan);
+    onConfirm(plan);
+  }
+
+  return createPortal(
+    <div
+      style={{ position: "fixed", inset: 0, zIndex: 9998, display: "flex", alignItems: "flex-end", justifyContent: "center", background: "rgba(0,0,0,0.55)", backdropFilter: "blur(2px)" }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: "#fff", width: "100%", maxWidth: 480, maxHeight: "88vh", borderRadius: "24px 24px 0 0", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 -8px 40px rgba(0,0,0,0.2)" }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div style={{ background: "linear-gradient(to right, #4f46e5, #7c3aed)", padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+          <div>
+            <div style={{ color: "#fff", fontWeight: 700, fontSize: 15 }}>AIで訪問プランを作る</div>
+            <div style={{ color: "rgba(196,181,253,0.9)", fontSize: 12, marginTop: 2 }}>{town.prefecture} {town.name}</div>
+          </div>
+          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,0.2)", color: "#fff", border: "none", cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", display: "block", marginBottom: 8 }}>訪問日を選ぶ</label>
+            <input
+              type="date"
+              value={date}
+              min={new Date().toISOString().split("T")[0]}
+              onChange={e => setDate(e.target.value)}
+              style={{ width: "100%", border: "1px solid #e5e7eb", borderRadius: 12, padding: "10px 16px", fontSize: 14, boxSizing: "border-box", outline: "none" }}
+            />
+          </div>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>AIが提案する訪問プラン</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {planItems.map((item, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12, background: "#eef2ff", borderRadius: 12, padding: "10px 14px", border: "1px solid #e0e7ff" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#4f46e5", whiteSpace: "nowrap", width: 42, flexShrink: 0, paddingTop: 1 }}>{item.time}</div>
+                  <div style={{ fontSize: 13, color: "#374151" }}>{item.item}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ marginTop: 16, background: "#f9fafb", borderRadius: 12, padding: "12px 16px", fontSize: 12, color: "#6b7280", lineHeight: 1.6 }}>
+            <div>🕙 10:00〜18:00　📍 {town.prefecture} {town.name}</div>
+            <div>目的：観光・地域課題ヒアリング・移住相談</div>
+          </div>
+        </div>
+        <div style={{ padding: "16px 20px", borderTop: "1px solid #f3f4f6", flexShrink: 0, display: "flex", gap: 12 }}>
+          <button onClick={onClose} style={{ flex: 1, border: "1px solid #e5e7eb", background: "#fff", color: "#374151", padding: 12, borderRadius: 12, fontSize: 14, fontWeight: 500, cursor: "pointer" }}>
+            キャンセル
+          </button>
+          <button onClick={handleConfirm} style={{ flex: 1, background: "#4f46e5", color: "#fff", border: "none", padding: 12, borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+            この予定で確定
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// ============================================================
 // TOWN DETAIL
 // ============================================================
-function TownDetail({ town, userLoc, favorites, onToggleFav, onClose, isLoggedIn }) {
+function TownDetail({ town, userLoc, favorites, onToggleFav, onClose, isLoggedIn, onScheduleVisit }) {
   const [tab, setTab] = useState("issues");
   const [periodFilter, setPeriodFilter] = useState("all");
   const [evtFilter, setEvtFilter] = useState("all");
   const [aiRecommend, setAiRecommend] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
+  const [showVisitPlan, setShowVisitPlan] = useState(false);
+  const [planConfirmed, setPlanConfirmed] = useState(false);
 
   const c = sosColor(town.sos_score);
   const isFav = favorites.includes(town.id);
@@ -882,6 +991,7 @@ function TownDetail({ town, userLoc, favorites, onToggleFav, onClose, isLoggedIn
   ];
 
   return (
+    <>
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
       <div
         className="bg-white w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl sm:rounded-3xl rounded-t-3xl max-h-[94vh] overflow-hidden flex flex-col shadow-2xl"
@@ -1038,6 +1148,9 @@ function TownDetail({ town, userLoc, favorites, onToggleFav, onClose, isLoggedIn
                 <div className="flex gap-2 flex-wrap">
                   <button onClick={() => setTab("jobs")} className="text-xs bg-indigo-600 text-white px-4 py-2 rounded-xl font-medium hover:bg-indigo-700 transition-colors">
                     関わり方を見る →
+                  </button>
+                  <button onClick={() => setShowVisitPlan(true)} className="text-xs bg-purple-600 text-white px-4 py-2 rounded-xl font-medium hover:bg-purple-700 transition-colors">
+                    📅 訪問プランを作る
                   </button>
                   <button onClick={() => setTab("industry")} className="text-xs border border-indigo-200 text-indigo-700 px-4 py-2 rounded-xl font-medium hover:bg-indigo-50 transition-colors">
                     企業として相談する
@@ -1255,6 +1368,29 @@ function TownDetail({ town, userLoc, favorites, onToggleFav, onClose, isLoggedIn
         </div>
       </div>
     </div>
+
+    {showVisitPlan && (
+      <VisitPlanModal
+        town={town}
+        onConfirm={plan => {
+          onScheduleVisit?.(plan);
+          setShowVisitPlan(false);
+          setPlanConfirmed(true);
+          setTimeout(() => setPlanConfirmed(false), 3000);
+        }}
+        onClose={() => setShowVisitPlan(false)}
+      />
+    )}
+
+    {planConfirmed && createPortal(
+      <div style={{ position: "fixed", bottom: 90, left: "50%", transform: "translateX(-50%)", zIndex: 10001, pointerEvents: "none", whiteSpace: "nowrap" }}>
+        <div style={{ background: "#4f46e5", color: "#fff", padding: "12px 24px", borderRadius: 16, fontSize: 13, fontWeight: 600, boxShadow: "0 8px 32px rgba(79,70,229,0.45)" }}>
+          ✅ 訪問プランをマイページに追加しました！
+        </div>
+      </div>,
+      document.body
+    )}
+    </>
   );
 }
 
@@ -1694,7 +1830,7 @@ function AIRecommendPage({ towns, onSelectTown }) {
 // ============================================================
 // MYPAGE
 // ============================================================
-function MyPage({ user, towns, favorites, onToggleFav }) {
+function MyPage({ user, towns, favorites, onToggleFav, scheduledPlans = [], onMarkGoogleAdded }) {
   const favTowns = towns.filter(t => favorites.includes(t.id));
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 py-6 max-w-5xl mx-auto space-y-5">
@@ -1783,6 +1919,67 @@ function MyPage({ user, towns, favorites, onToggleFav }) {
                     )}
                   </div>
                   <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 flex-shrink-0">参加済み</Badge>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Machi Match カレンダー */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Machi Match カレンダー</div>
+          {scheduledPlans.length > 0 && (
+            <span className="text-xs bg-indigo-100 text-indigo-700 border border-indigo-200 px-2.5 py-0.5 rounded-full font-medium">{scheduledPlans.length}件</span>
+          )}
+        </div>
+        {scheduledPlans.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center shadow-sm">
+            <div className="text-3xl mb-2">📅</div>
+            <div className="text-sm text-gray-400">訪問プランがありません</div>
+            <div className="text-xs text-gray-300 mt-1">自治体詳細から「📅 訪問プランを作る」で追加できます</div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {scheduledPlans.map(plan => (
+              <div key={plan.id} className="bg-white border border-indigo-100 rounded-2xl overflow-hidden shadow-sm">
+                {plan.imageUrl && (
+                  <div className="relative h-20 overflow-hidden">
+                    <img src={plan.imageUrl} alt={plan.townName} className="w-full h-full object-cover" onError={e => { e.target.style.display = "none"; }} />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                    <div className="absolute bottom-2 left-3 text-white text-sm font-bold drop-shadow">{plan.prefecture} {plan.townName}</div>
+                  </div>
+                )}
+                <div className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-bold text-gray-900 truncate">{plan.title}</div>
+                      <div className="text-xs text-gray-400 mt-0.5">{plan.date} · {plan.startTime}〜{plan.endTime}</div>
+                      <div className="text-xs text-gray-400">📍 {plan.location}</div>
+                    </div>
+                    <span className="text-xs bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full font-medium flex-shrink-0">確定</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {plan.planItems.slice(0, 3).map((item, i) => (
+                      <div key={i} className="flex gap-2 text-xs text-gray-600">
+                        <span className="text-indigo-500 font-semibold w-10 flex-shrink-0">{item.time}</span>
+                        <span className="flex-1 truncate">{item.item}</span>
+                      </div>
+                    ))}
+                    {plan.planItems.length > 3 && (
+                      <div className="text-xs text-gray-400">他 {plan.planItems.length - 3} 件...</div>
+                    )}
+                  </div>
+                  <a
+                    href={plan.googleCalendarUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => onMarkGoogleAdded?.(plan.id)}
+                    className={`block text-center text-xs py-2.5 rounded-xl font-medium transition-colors ${plan.addedToGoogleCalendar ? "bg-gray-100 text-gray-500" : "bg-indigo-600 text-white hover:bg-indigo-700"}`}
+                  >
+                    {plan.addedToGoogleCalendar ? "✓ Googleカレンダー追加済み" : "📆 Googleカレンダーに追加"}
+                  </a>
                 </div>
               </div>
             ))}
@@ -1907,6 +2104,21 @@ export default function MachiMatch() {
   const [onlyWithGift, setOnlyWithGift] = useState(false);
   const [travelFilter, setTravelFilter] = useState(0); // 0=off
   const [showDartsModal, setShowDartsModal] = useState(false);
+  const [scheduledPlans, setScheduledPlans] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("machiMatchPlans") || "[]"); } catch { return []; }
+  });
+
+  useEffect(() => {
+    localStorage.setItem("machiMatchPlans", JSON.stringify(scheduledPlans));
+  }, [scheduledPlans]);
+
+  function addScheduledPlan(plan) {
+    setScheduledPlans(prev => [plan, ...prev]);
+  }
+
+  function markPlanGoogleAdded(id) {
+    setScheduledPlans(prev => prev.map(p => p.id === id ? { ...p, addedToGoogleCalendar: true } : p));
+  }
 
   function toggleFav(id) {
     if (!isLoggedIn) { alert("お気に入りを保存するにはログインが必要です。"); return; }
@@ -2309,7 +2521,7 @@ export default function MachiMatch() {
 
         {page === "mypage" && (
           isLoggedIn
-            ? <MyPage user={user} towns={TOWNS} favorites={favorites} onToggleFav={toggleFav} />
+            ? <MyPage user={user} towns={TOWNS} favorites={favorites} onToggleFav={toggleFav} scheduledPlans={scheduledPlans} onMarkGoogleAdded={markPlanGoogleAdded} />
             : (
               <div className="flex flex-col items-center justify-center py-20 px-8 text-center max-w-sm mx-auto">
                 <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-4xl mb-5 shadow-sm">👤</div>
@@ -2351,6 +2563,7 @@ export default function MachiMatch() {
           onToggleFav={toggleFav}
           onClose={() => setSelectedTown(null)}
           isLoggedIn={isLoggedIn}
+          onScheduleVisit={addScheduledPlan}
         />
       )}
 
