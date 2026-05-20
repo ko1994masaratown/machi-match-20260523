@@ -402,6 +402,68 @@ async function generateWithClaude(prompt, fallbackText) {
 }
 
 // ============================================================
+// HERO VISUALS — day-based rotation
+// ============================================================
+const HERO_VISUALS = [
+  {
+    imageUrl: "https://picsum.photos/seed/akita-rice-harvest/1600/700",
+    region: "秋田県 仙北市",
+    story: "あきたこまちが黄金に実る棚田。農業の担い手と移住者を待っています。",
+    season: "秋の棚田",
+    theme: "農業・自然",
+  },
+  {
+    imageUrl: "https://picsum.photos/seed/shimane-river-kyoto/1600/700",
+    region: "島根県 津和野町",
+    story: "石州和紙と清流が育む山陰の小京都。伝統工芸の後継者を探しています。",
+    season: "春の古街",
+    theme: "伝統工芸",
+  },
+  {
+    imageUrl: "https://picsum.photos/seed/nagano-highland-yatsugatake/1600/700",
+    region: "長野県 小海町",
+    story: "八ヶ岳を望む標高1000mの高原。リモートワークと自然の共存を実現。",
+    season: "夏の高原",
+    theme: "観光・IT",
+  },
+  {
+    imageUrl: "https://picsum.photos/seed/hokkaido-daisetsuzan-forest/1600/700",
+    region: "北海道 東川町",
+    story: "大雪山と清流に囲まれた写真文化の町。移住者と地域が共に成長しています。",
+    season: "初夏の大地",
+    theme: "自然・写真文化",
+  },
+  {
+    imageUrl: "https://picsum.photos/seed/kochi-shimanto-river/1600/700",
+    region: "高知県 四万十町",
+    story: "四万十川の流れとともに、農業と自然の担い手が育まれています。",
+    season: "夏の清流",
+    theme: "農業・川",
+  },
+  {
+    imageUrl: "https://picsum.photos/seed/fukushima-tadami-snow/1600/700",
+    region: "福島県 只見町",
+    story: "豪雪地帯に息づく縄文の文化。只見川の絶景と共に生きる人を求めています。",
+    season: "冬の雪景色",
+    theme: "雪・自然遺産",
+  },
+  {
+    imageUrl: "https://picsum.photos/seed/oita-kokonoe-prairie/1600/700",
+    region: "大分県 九重町",
+    story: "九州の屋根、標高1000mに広がる草原温泉。農業と観光の担い手を急募。",
+    season: "秋の草原",
+    theme: "温泉・農業",
+  },
+  {
+    imageUrl: "https://picsum.photos/seed/iwate-tono-folklore/1600/700",
+    region: "岩手県 遠野市",
+    story: "カッパが住むと言われる民話の里。文化の伝承者と農業従事者を求めています。",
+    season: "初秋の里山",
+    theme: "民話・文化",
+  },
+];
+
+// ============================================================
 // SUB COMPONENTS
 // ============================================================
 function Badge({ children, className = "" }) {
@@ -1204,9 +1266,9 @@ function AIRecommendPage({ towns, user, userLoc }) {
     <div className="max-w-2xl mx-auto px-4 py-6">
       {/* Page header */}
       <div className="mb-6">
-        <div className="text-xs font-semibold text-indigo-600 uppercase tracking-wider mb-1">AI マッチング</div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-1">あなたにぴったりの自治体を探す</h2>
-        <p className="text-sm text-gray-500 leading-relaxed">スキルと関わり方の希望を選ぶだけで、AIが最適な3自治体を推薦します。</p>
+        <div className="text-xs font-semibold text-indigo-600 uppercase tracking-wider mb-1">地域マッチング</div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-1">自分に合う地域を見つける</h2>
+        <p className="text-sm text-gray-500 leading-relaxed">興味・スキル・現在地から、関われる地域を提案します。</p>
       </div>
 
       <div className="space-y-5">
@@ -1263,14 +1325,14 @@ function AIRecommendPage({ towns, user, userLoc }) {
           disabled={loading}
           className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-4 rounded-2xl font-semibold hover:opacity-90 disabled:opacity-50 transition-all shadow-md hover:shadow-lg text-sm"
         >
-          {loading ? "AIが分析中…" : "✨ AIに推薦してもらう"}
+          {loading ? "分析中…" : "自分に合う地域を見つける"}
         </button>
 
         {/* Results */}
         {result && (
           <div className="bg-white border border-indigo-100 rounded-2xl overflow-hidden shadow-sm">
             <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-3">
-              <div className="text-xs font-semibold text-white/80 uppercase tracking-wider">AI推薦結果</div>
+              <div className="text-xs font-semibold text-white/80 uppercase tracking-wider">あなたにおすすめの地域</div>
             </div>
             <div className="p-5">
               <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{result}</p>
@@ -1530,18 +1592,22 @@ export default function MachiMatch() {
   const navItems = [
     { id: "map", icon: "🗾", label: "マップ" },
     { id: "events", icon: "🎆", label: "イベント" },
-    { id: "ai", icon: "✨", label: "AI推薦" },
+    { id: "ai", icon: "🗺️", label: "地域探し" },
     { id: "mypage", icon: "👤", label: "マイページ" },
   ];
 
   const urgentCount = TOWNS.filter(t => t.sos_score >= 90).length;
   const totalJobs = TOWNS.reduce((acc, t) => acc + t.jobs.length, 0);
 
+  const today = new Date();
+  const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86400000);
+  const heroVisual = HERO_VISUALS[dayOfYear % HERO_VISUALS.length];
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col" style={{ fontFamily: "'Hiragino Sans', 'Noto Sans JP', sans-serif" }}>
       {/* TOP BAR */}
       <header className="bg-white border-b border-gray-100 sticky top-0 z-40 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white text-sm font-bold shadow-sm">M</div>
             <div>
@@ -1578,50 +1644,111 @@ export default function MachiMatch() {
         {/* MAP PAGE */}
         {page === "map" && (
           <div>
-            {/* Hero section */}
-            <div className="bg-gradient-to-br from-indigo-700 via-indigo-600 to-purple-700 text-white">
-              <div className="max-w-6xl mx-auto px-4 py-8 sm:py-10 lg:py-14">
-                <div className="text-xs font-semibold text-indigo-300 uppercase tracking-widest mb-2">地域共創プラットフォーム</div>
-                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold leading-snug mb-2">
-                  助けを求める町と<br/>力を活かしたい人をつなぐ
-                </h1>
-                <p className="text-sm text-indigo-200 leading-relaxed mb-5">
-                  全国の過疎地域の課題に、副業・ボランティア・移住・事業承継など<br className="hidden sm:block"/>さまざまな形で関われます。
-                </p>
-                <div className="flex gap-3 flex-wrap mb-6">
-                  <button
-                    onClick={requestGPS}
-                    className="bg-white text-indigo-700 font-semibold text-sm px-5 py-2.5 rounded-xl hover:bg-indigo-50 transition-colors shadow-sm"
-                  >
-                    近くのSOSを見る
-                  </button>
-                  <button
-                    onClick={() => setPage("ai")}
-                    className="bg-indigo-500/40 text-white font-medium text-sm px-5 py-2.5 rounded-xl border border-indigo-400/60 hover:bg-indigo-500/60 transition-colors"
-                  >
-                    ✨ AI推薦を使う
-                  </button>
+            {/* Hero section — photo background with daily visual rotation */}
+            <div className="relative w-full overflow-hidden" style={{ minHeight: "440px" }}>
+              {/* Background: fallback gradient always rendered first */}
+              <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-800" />
+              {/* Background photo */}
+              <img
+                src={heroVisual.imageUrl}
+                alt={heroVisual.region}
+                className="absolute inset-0 w-full h-full object-cover"
+                onError={e => { e.target.style.display = "none"; }}
+              />
+              {/* Dark overlay: stronger on left for text readability */}
+              <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/55 to-black/20" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/20" />
+
+              {/* Content */}
+              <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14 lg:py-20">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:gap-16">
+
+                  {/* Left: main copy + CTA */}
+                  <div className="flex-1 text-white">
+                    <div className="text-xs font-semibold text-white/55 uppercase tracking-widest mb-3">地域共創プラットフォーム</div>
+                    <h1 className="text-3xl sm:text-4xl lg:text-[2.75rem] font-bold leading-tight mb-4 drop-shadow-md">
+                      風景の奥に、<br/>まだ見えていない<br className="sm:hidden"/>SOSがある
+                    </h1>
+                    <p className="text-sm sm:text-base text-white/80 leading-relaxed mb-6 max-w-lg">
+                      助けを求める町と、力を活かしたい人をつなぐ。<br className="hidden sm:block"/>副業・ボランティア・移住・事業承継など、さまざまな形で関われます。
+                    </p>
+                    <div className="flex gap-3 flex-wrap mb-8">
+                      <button
+                        onClick={requestGPS}
+                        className="bg-white text-gray-900 font-semibold text-sm px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors shadow-md"
+                      >
+                        近くのSOSを見る
+                      </button>
+                      <button
+                        onClick={() => setPage("ai")}
+                        className="bg-white/15 text-white font-medium text-sm px-6 py-3 rounded-xl border border-white/30 hover:bg-white/25 transition-colors backdrop-blur-sm"
+                      >
+                        自分に合う地域を見つける
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4 border-t border-white/20 pt-5 max-w-xs sm:max-w-sm">
+                      <div>
+                        <div className="text-2xl sm:text-3xl font-bold">{TOWNS.length}</div>
+                        <div className="text-xs text-white/55">参加自治体</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl sm:text-3xl font-bold text-rose-300">{urgentCount}</div>
+                        <div className="text-xs text-white/55">緊急SOS</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl sm:text-3xl font-bold">{totalJobs}</div>
+                        <div className="text-xs text-white/55">関わり方</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right: Today's Regional Art card — PC only */}
+                  <div className="hidden lg:flex flex-col w-72 xl:w-80 flex-shrink-0">
+                    <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl overflow-hidden shadow-2xl">
+                      <div className="px-4 py-2.5 flex items-center justify-between border-b border-white/15">
+                        <div className="text-xs text-white/60 font-semibold uppercase tracking-wider">今日の地域アート</div>
+                        <div className="text-xs text-white/40">{new Date().toLocaleDateString("ja-JP", { month: "long", day: "numeric" })}</div>
+                      </div>
+                      <div className="relative h-44 overflow-hidden">
+                        <img
+                          src={heroVisual.imageUrl}
+                          alt={heroVisual.region}
+                          className="w-full h-full object-cover"
+                          onError={e => { e.target.style.display = "none"; }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
+                        <div className="absolute bottom-0 left-0 right-0 p-3">
+                          <div className="text-xs text-white/65 mb-0.5">{heroVisual.season}</div>
+                          <div className="font-bold text-white text-sm leading-tight">{heroVisual.region}</div>
+                        </div>
+                        <div className="absolute top-2.5 right-2.5">
+                          <span className="text-xs bg-white/20 backdrop-blur-sm text-white/80 border border-white/30 px-2 py-0.5 rounded-full">#{heroVisual.theme}</span>
+                        </div>
+                      </div>
+                      <div className="p-3.5">
+                        <p className="text-xs text-white/80 leading-relaxed">{heroVisual.story}</p>
+                        <button
+                          onClick={() => setSelectedTown(TOWNS.find(t => t.prefecture === heroVisual.region.split(" ")[0]) || TOWNS[0])}
+                          className="mt-3 w-full text-xs bg-white/15 hover:bg-white/25 text-white border border-white/20 py-2 rounded-xl transition-colors font-medium"
+                        >
+                          この地域を見る
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-xs text-white/35 mt-2.5 text-center leading-relaxed">地域の魅力と課題を、毎日の入り口に</p>
+                  </div>
                 </div>
-                <div className="grid grid-cols-3 gap-4 border-t border-indigo-500/50 pt-5">
-                  <div>
-                    <div className="text-2xl font-bold">{TOWNS.length}</div>
-                    <div className="text-xs text-indigo-300">参加自治体</div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-rose-300">{urgentCount}</div>
-                    <div className="text-xs text-indigo-300">緊急SOS</div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold">{totalJobs}</div>
-                    <div className="text-xs text-indigo-300">関わり方</div>
-                  </div>
-                </div>
+              </div>
+
+              {/* Day label bottom-right */}
+              <div className="absolute bottom-3 right-4 text-xs text-white/30 hidden sm:block">
+                {new Date().toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" })} の地域
               </div>
             </div>
 
             {/* Search & filters */}
             <div className="bg-white border-b border-gray-100 sticky top-[57px] z-30 shadow-sm">
-              <div className="max-w-6xl mx-auto px-4 py-3 space-y-2">
+              <div className="max-w-7xl mx-auto px-4 py-3 space-y-2">
                 <input
                   value={search}
                   onChange={e => setSearch(e.target.value)}
@@ -1672,7 +1799,7 @@ export default function MachiMatch() {
             </div>
 
             {/* Emergency banner */}
-            <div className="max-w-6xl mx-auto px-4 pt-5">
+            <div className="max-w-7xl mx-auto px-4 pt-5">
               <div className="relative bg-gradient-to-r from-red-600 to-rose-500 text-white rounded-2xl px-5 py-4 mb-5 overflow-hidden shadow-md">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-8 translate-x-8" />
                 <div className="relative flex items-center justify-between gap-4">
@@ -1695,12 +1822,12 @@ export default function MachiMatch() {
             </div>
 
             {/* Town grid */}
-            <div className="max-w-6xl mx-auto px-4 pb-6">
+            <div className="max-w-7xl mx-auto px-4 pb-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="text-sm font-semibold text-gray-700">{towns.length}自治体</div>
                 {search && <div className="text-xs text-gray-400">「{search}」の検索結果</div>}
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {towns.map((t, i) => (
                   <TownCard
                     key={t.id}
@@ -1738,7 +1865,7 @@ export default function MachiMatch() {
 
       {/* BOTTOM NAV */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-gray-100 z-40 shadow-lg">
-        <div className="max-w-6xl mx-auto flex">
+        <div className="max-w-7xl mx-auto flex">
           {navItems.map(item => (
             <button
               key={item.id}
