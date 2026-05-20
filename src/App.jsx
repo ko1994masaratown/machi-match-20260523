@@ -404,62 +404,94 @@ async function generateWithClaude(prompt, fallbackText) {
 // ============================================================
 // HERO VISUALS — day-based rotation
 // ============================================================
-const HERO_VISUALS = [
+const REGION_HIGHLIGHTS = [
   {
-    imageUrl: "https://picsum.photos/seed/akita-rice-harvest/1600/700",
-    region: "秋田県 仙北市",
-    story: "あきたこまちが黄金に実る棚田。農業の担い手と移住者を待っています。",
-    season: "秋の棚田",
-    theme: "農業・自然",
+    id: 1,
+    townId: "kochi-001",
+    area: "高知県 四万十町",
+    category: "農業・清流",
+    title: "夏の清流",
+    catchcopy: "川と農の暮らしを、次の世代へつなぐ町",
+    description: "四万十川の流れとともに、有機農業と自然の担い手が育まれています。日本最後の清流沿いに暮らす人々の知恵が、今も受け継がれています。",
+    sos: "農業の担い手と、地域活動を担う若者が不足",
+    image: "https://picsum.photos/id/28/1600/700",
   },
   {
-    imageUrl: "https://picsum.photos/seed/shimane-river-kyoto/1600/700",
-    region: "島根県 津和野町",
-    story: "石州和紙と清流が育む山陰の小京都。伝統工芸の後継者を探しています。",
-    season: "春の古街",
-    theme: "伝統工芸",
+    id: 2,
+    townId: "akita-001",
+    area: "秋田県 仙北市",
+    category: "農業・伝統",
+    title: "秋の棚田",
+    catchcopy: "あきたこまちが黄金に実る里。農業の担い手を求める町",
+    description: "角館武家屋敷と田沢湖を擁する仙北市。高齢化率51%の中で、農業・介護・観光の三分野で人材を急募しています。",
+    sos: "農業後継者と介護人材が深刻に不足",
+    image: "https://picsum.photos/id/15/1600/700",
   },
   {
-    imageUrl: "https://picsum.photos/seed/nagano-highland-yatsugatake/1600/700",
-    region: "長野県 小海町",
-    story: "八ヶ岳を望む標高1000mの高原。リモートワークと自然の共存を実現。",
-    season: "夏の高原",
-    theme: "観光・IT",
+    id: 3,
+    townId: "shimane-001",
+    area: "島根県 津和野町",
+    category: "伝統工芸・移住",
+    title: "春の古街",
+    catchcopy: "山陰の小京都、石州和紙の技を次の世代へ",
+    description: "石州和紙の伝統が息づく津和野。鷺舞の祭りとともに、1300年の技術を守る職人たちが後継者を探しています。",
+    sos: "伝統工芸の後継者不足と、空き家の活用人材が急務",
+    image: "https://picsum.photos/id/42/1600/700",
   },
   {
-    imageUrl: "https://picsum.photos/seed/hokkaido-daisetsuzan-forest/1600/700",
-    region: "北海道 東川町",
-    story: "大雪山と清流に囲まれた写真文化の町。移住者と地域が共に成長しています。",
-    season: "初夏の大地",
-    theme: "自然・写真文化",
+    id: 4,
+    townId: "hokkaido-001",
+    area: "北海道 東川町",
+    category: "自然・写真文化",
+    title: "初夏の大地",
+    catchcopy: "大雪山と清流に囲まれた、写真文化の実験都市",
+    description: "「写真の町」として知られる東川町。移住者数が増え続ける一方で、地域産業と農業を担う人材が慢性的に不足しています。",
+    sos: "農業・観光・地域活動の担い手不足",
+    image: "https://picsum.photos/id/10/1600/700",
   },
   {
-    imageUrl: "https://picsum.photos/seed/kochi-shimanto-river/1600/700",
-    region: "高知県 四万十町",
-    story: "四万十川の流れとともに、農業と自然の担い手が育まれています。",
-    season: "夏の清流",
-    theme: "農業・川",
+    id: 5,
+    townId: "nagano-001",
+    area: "長野県 小海町",
+    category: "観光・IT",
+    title: "八ヶ岳の高原",
+    catchcopy: "標高1000mの高原から、リモートと地域の未来を創る",
+    description: "八ヶ岳を望む清里高原の麓。都市から移住するIT人材と、地域の観光業者をつなぐ取り組みが進んでいます。",
+    sos: "IT人材と観光業の担い手が不足",
+    image: "https://picsum.photos/id/57/1600/700",
   },
   {
-    imageUrl: "https://picsum.photos/seed/fukushima-tadami-snow/1600/700",
-    region: "福島県 只見町",
-    story: "豪雪地帯に息づく縄文の文化。只見川の絶景と共に生きる人を求めています。",
-    season: "冬の雪景色",
-    theme: "雪・自然遺産",
+    id: 6,
+    townId: "fukushima-001",
+    area: "福島県 只見町",
+    category: "雪・自然遺産",
+    title: "冬の雪景色",
+    catchcopy: "豪雪地帯に息づく縄文の文化と、只見川の絶景",
+    description: "日本有数の豪雪地帯・只見町。只見川の霧に包まれた絶景は世界的に知られますが、過疎化と高齢化が深刻です。",
+    sos: "雪かきから農業まで、通年で関わる担い手が急務",
+    image: "https://picsum.photos/id/13/1600/700",
   },
   {
-    imageUrl: "https://picsum.photos/seed/oita-kokonoe-prairie/1600/700",
-    region: "大分県 九重町",
-    story: "九州の屋根、標高1000mに広がる草原温泉。農業と観光の担い手を急募。",
-    season: "秋の草原",
-    theme: "温泉・農業",
+    id: 7,
+    townId: "oita-001",
+    area: "大分県 九重町",
+    category: "温泉・農業",
+    title: "秋の九重連山",
+    catchcopy: "九州の屋根から、農と温泉の暮らしへ誘う",
+    description: "くじゅう連山に囲まれた高原の町。温泉と農業が共存する豊かな自然環境の中、後継者と移住者を求めています。",
+    sos: "農業後継者と観光業の担い手が慢性的に不足",
+    image: "https://picsum.photos/id/45/1600/700",
   },
   {
-    imageUrl: "https://picsum.photos/seed/iwate-tono-folklore/1600/700",
-    region: "岩手県 遠野市",
-    story: "カッパが住むと言われる民話の里。文化の伝承者と農業従事者を求めています。",
-    season: "初秋の里山",
-    theme: "民話・文化",
+    id: 8,
+    townId: "iwate-001",
+    area: "岩手県 遠野市",
+    category: "民話・農業",
+    title: "初秋の里山",
+    catchcopy: "カッパが住む民話の里で、農と文化をつなぐ仕事を",
+    description: "柳田国男『遠野物語』の舞台として知られる遠野市。農業・観光・文化伝承の三分野で外部からの関わりを求めています。",
+    sos: "文化伝承と農業の担い手、移住定住支援の人材が不足",
+    image: "https://picsum.photos/id/37/1600/700",
   },
 ];
 
@@ -1599,9 +1631,8 @@ export default function MachiMatch() {
   const urgentCount = TOWNS.filter(t => t.sos_score >= 90).length;
   const totalJobs = TOWNS.reduce((acc, t) => acc + t.jobs.length, 0);
 
-  const today = new Date();
-  const dayOfYear = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86400000);
-  const heroVisual = HERO_VISUALS[dayOfYear % HERO_VISUALS.length];
+  const [heroIdx] = useState(() => Math.floor(Math.random() * REGION_HIGHLIGHTS.length));
+  const highlight = REGION_HIGHLIGHTS[heroIdx];
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col" style={{ fontFamily: "'Hiragino Sans', 'Noto Sans JP', sans-serif" }}>
@@ -1650,8 +1681,8 @@ export default function MachiMatch() {
               <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-800" />
               {/* Background photo */}
               <img
-                src={heroVisual.imageUrl}
-                alt={heroVisual.region}
+                src={highlight.image}
+                alt={highlight.area}
                 className="absolute inset-0 w-full h-full object-cover"
                 onError={e => { e.target.style.display = "none"; }}
               />
@@ -1709,27 +1740,32 @@ export default function MachiMatch() {
                         <div className="text-xs text-white/60 font-semibold uppercase tracking-wider">今日の地域アート</div>
                         <div className="text-xs text-white/40">{new Date().toLocaleDateString("ja-JP", { month: "long", day: "numeric" })}</div>
                       </div>
-                      <div className="relative h-44 overflow-hidden">
+                      <div className="relative h-40 overflow-hidden">
                         <img
-                          src={heroVisual.imageUrl}
-                          alt={heroVisual.region}
+                          src={highlight.image}
+                          alt={highlight.area}
                           className="w-full h-full object-cover"
                           onError={e => { e.target.style.display = "none"; }}
                         />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
                         <div className="absolute bottom-0 left-0 right-0 p-3">
-                          <div className="text-xs text-white/65 mb-0.5">{heroVisual.season}</div>
-                          <div className="font-bold text-white text-sm leading-tight">{heroVisual.region}</div>
+                          <div className="text-xs text-white/60 mb-0.5">{highlight.title}</div>
+                          <div className="font-bold text-white text-sm leading-tight">{highlight.area}</div>
                         </div>
                         <div className="absolute top-2.5 right-2.5">
-                          <span className="text-xs bg-white/20 backdrop-blur-sm text-white/80 border border-white/30 px-2 py-0.5 rounded-full">#{heroVisual.theme}</span>
+                          <span className="text-xs bg-white/20 backdrop-blur-sm text-white/80 border border-white/30 px-2 py-0.5 rounded-full">{highlight.category}</span>
                         </div>
                       </div>
-                      <div className="p-3.5">
-                        <p className="text-xs text-white/80 leading-relaxed">{heroVisual.story}</p>
+                      <div className="p-3.5 space-y-2">
+                        <p className="text-xs text-white/90 font-medium leading-snug">{highlight.catchcopy}</p>
+                        <p className="text-xs text-white/65 leading-relaxed">{highlight.description}</p>
+                        <div className="bg-red-500/20 border border-red-400/30 rounded-lg px-2.5 py-1.5">
+                          <div className="text-xs text-red-300 font-semibold mb-0.5">SOS</div>
+                          <p className="text-xs text-white/75 leading-snug">{highlight.sos}</p>
+                        </div>
                         <button
-                          onClick={() => setSelectedTown(TOWNS.find(t => t.prefecture === heroVisual.region.split(" ")[0]) || TOWNS[0])}
-                          className="mt-3 w-full text-xs bg-white/15 hover:bg-white/25 text-white border border-white/20 py-2 rounded-xl transition-colors font-medium"
+                          onClick={() => setSelectedTown(TOWNS.find(t => t.id === highlight.townId) || TOWNS[0])}
+                          className="mt-1 w-full text-xs bg-white/15 hover:bg-white/25 text-white border border-white/20 py-2 rounded-xl transition-colors font-medium"
                         >
                           この地域を見る
                         </button>
