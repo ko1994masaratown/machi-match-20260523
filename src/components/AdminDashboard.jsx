@@ -37,7 +37,7 @@ export default function AdminDashboard({ towns }) {
   ];
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6">
+    <div className="max-w-2xl lg:max-w-5xl mx-auto px-4 py-6">
       {/* Header */}
       <div className="mb-5">
         <div className="flex items-center gap-2 mb-2">
@@ -86,7 +86,7 @@ export default function AdminDashboard({ towns }) {
       {activeTab === "overview" && (
         <div className="space-y-4">
           {/* KPI grid */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               { label: "全ユーザー数", value: "1,247", icon: "👤", color: "text-indigo-600" },
               { label: "自治体アカウント", value: towns.length, icon: "🏛️", color: "text-emerald-600" },
@@ -106,7 +106,7 @@ export default function AdminDashboard({ towns }) {
           </div>
 
           {/* Towns list */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 lg:max-w-2xl">
             <div className="text-sm font-semibold text-gray-800 mb-3">
               参加自治体一覧（{towns.length}件）
             </div>
@@ -141,6 +141,7 @@ export default function AdminDashboard({ towns }) {
           <div className="text-sm font-semibold text-gray-800 mb-1">
             承認待ち一覧（{pendingCount}件）
           </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {pendingItems.length === 0 ? (
             <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center text-gray-400 shadow-sm">
               承認待ちの投稿はありません
@@ -202,6 +203,7 @@ export default function AdminDashboard({ towns }) {
               </div>
             ))
           )}
+          </div>{/* end inner grid */}
         </div>
       )}
 

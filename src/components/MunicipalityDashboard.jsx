@@ -67,7 +67,7 @@ export default function MunicipalityDashboard({ towns }) {
   ];
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6">
+    <div className="max-w-2xl lg:max-w-5xl mx-auto px-4 py-6">
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-2 mb-2">
@@ -106,7 +106,7 @@ export default function MunicipalityDashboard({ towns }) {
 
       {/* ── 概要 ── */}
       {activeTab === "overview" && (
-        <div className="space-y-4">
+        <div className="space-y-4 lg:grid lg:grid-cols-2 lg:gap-5 lg:space-y-0">
           {/* Town profile card */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="relative h-32 overflow-hidden">

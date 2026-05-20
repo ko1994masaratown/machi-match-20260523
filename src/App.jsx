@@ -954,7 +954,7 @@ function TownDetail({ town, userLoc, favorites, onToggleFav, onClose, isLoggedIn
             </div>
 
             {/* Stats row */}
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {[
                 ["人口", `${(town.population/10000).toFixed(1)}万人`],
                 ["高齢化率", `${town.aging_rate}%`],
@@ -1299,7 +1299,7 @@ function AIRecommendPage({ towns, user, userLoc }) {
   const skillList = skills.split(/[、,]/).map(v => v.trim()).filter(Boolean);
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6">
+    <div className="max-w-2xl lg:max-w-4xl mx-auto px-4 py-6">
       {/* Page header */}
       <div className="mb-6">
         <div className="text-xs font-semibold text-indigo-600 uppercase tracking-wider mb-1">地域マッチング</div>
@@ -1342,7 +1342,7 @@ function AIRecommendPage({ towns, user, userLoc }) {
             <div className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold flex-shrink-0">2</div>
             <label className="text-sm font-semibold text-gray-800">関わり方の希望</label>
           </div>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {Object.entries(PERIOD_LABELS).map(([k, v]) => (
               <button
                 key={k}
@@ -1386,7 +1386,7 @@ function AIRecommendPage({ towns, user, userLoc }) {
 function MyPage({ user, towns, favorites, onToggleFav }) {
   const favTowns = towns.filter(t => favorites.includes(t.id));
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
+    <div className="max-w-2xl lg:max-w-4xl mx-auto px-4 py-6 space-y-5">
       {/* Profile card */}
       <div className="relative bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-700 rounded-3xl p-5 text-white overflow-hidden">
         <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-10 translate-x-10" />
@@ -1505,7 +1505,7 @@ function EventsPage({ towns, userLoc }) {
   const staffEvents = allEvents.filter(e => e.has_staff_job).length;
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6">
+    <div className="max-w-2xl lg:max-w-5xl mx-auto px-4 py-6">
       <div className="mb-5">
         <div className="text-xs font-semibold text-indigo-600 uppercase tracking-wider mb-1">全国イベント</div>
         <h2 className="text-2xl font-bold text-gray-900">地域のイベントに参加する</h2>
@@ -1530,7 +1530,7 @@ function EventsPage({ towns, userLoc }) {
         })}
       </div>
 
-      <div className="space-y-3">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {filtered.map((evt, i) => {
           const ec = EVT_COLORS[evt.category] || EVT_COLORS.other;
           const df = formatDate(evt.date);
@@ -1670,7 +1670,7 @@ export default function MachiMatch() {
   const slideColor = sosColor(currentTown.sos_score);
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col" style={{ fontFamily: "'Hiragino Sans', 'Noto Sans JP', sans-serif" }}>
+    <div className="min-h-screen bg-slate-50" style={{ fontFamily: "'Hiragino Sans', 'Noto Sans JP', sans-serif" }}>
       {/* TOP BAR */}
       <header className="bg-white border-b border-gray-100 sticky top-0 z-40 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -1716,13 +1716,46 @@ export default function MachiMatch() {
         );
       })()}
 
+      {/* BODY: sidebar + main */}
+      <div className="flex">
+        {/* DESKTOP SIDEBAR */}
+        <aside className="hidden lg:flex flex-col fixed left-0 top-[57px] bottom-0 w-56 bg-white border-r border-gray-100 z-30 pt-4 pb-6 shadow-sm">
+          <div className="px-3 mb-4">
+            <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2 mb-2">ナビゲーション</div>
+            {navItems.map(item => (
+              <button
+                key={item.id}
+                onClick={() => setPage(item.id)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all mb-0.5 ${
+                  page === item.id
+                    ? "bg-indigo-50 text-indigo-700"
+                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                }`}
+              >
+                <span className="text-lg leading-none">{item.icon}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </div>
+          {currentRole !== "general" && (() => {
+            const ri = getRoleInfo(currentRole);
+            return (
+              <div className="px-3 mt-auto">
+                <div className={`text-xs font-semibold px-3 py-2 rounded-xl border ${ri.badge}`}>
+                  {ri.emoji} {ri.label}
+                </div>
+              </div>
+            );
+          })()}
+        </aside>
+
       {/* MAIN */}
-      <main className="flex-1 pb-20">
+      <main className="flex-1 lg:ml-56 pb-24 lg:pb-10 min-w-0">
         {/* MAP PAGE */}
         {page === "map" && (
           <div>
             {/* Hero section — photo background with daily visual rotation */}
-            <div className="relative w-full overflow-hidden" style={{ minHeight: "440px" }}>
+            <div className="relative w-full overflow-hidden min-h-[280px] sm:min-h-[440px] lg:min-h-[520px]">
               {/* Background: fallback gradient always rendered first */}
               <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-800" />
               {/* Background photo — rotates with currentTown */}
@@ -1902,10 +1935,16 @@ export default function MachiMatch() {
                   ))}
                   <div className="w-px bg-gray-200 flex-shrink-0 mx-1" />
                   <button
-                    onClick={() => setSortBy(p => p === "score" ? "dist" : "score")}
-                    className="flex-shrink-0 text-xs px-3 py-1.5 rounded-full border border-gray-200 text-gray-500 font-medium hover:border-gray-400 transition-all"
+                    onClick={() => setSortBy("score")}
+                    className={`flex-shrink-0 text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${sortBy === "score" ? "bg-indigo-600 text-white border-indigo-600 shadow-sm" : "border-gray-200 text-gray-500 hover:border-indigo-300"}`}
                   >
-                    {sortBy === "score" ? "SOS順" : "距離順"}
+                    SOS順
+                  </button>
+                  <button
+                    onClick={() => setSortBy("dist")}
+                    className={`flex-shrink-0 text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${sortBy === "dist" ? "bg-emerald-600 text-white border-emerald-600 shadow-sm" : "border-gray-200 text-gray-500 hover:border-emerald-300"}`}
+                  >
+                    距離順
                   </button>
                 </div>
               </div>
@@ -1990,9 +2029,10 @@ export default function MachiMatch() {
             )
         )}
       </main>
+      </div>{/* end flex body */}
 
-      {/* BOTTOM NAV */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-gray-100 z-40 shadow-lg">
+      {/* BOTTOM NAV (mobile only) */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-gray-100 z-40 shadow-lg">
         <div className="max-w-7xl mx-auto flex">
           {navItems.map(item => (
             <button
