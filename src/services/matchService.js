@@ -85,7 +85,7 @@ export async function matchRegionsByGemini(userInput, regions) {
   const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
   const body = {
     contents: [{ parts: [{ text: buildPrompt(userInput, regions) }] }],
-    generationConfig: { temperature: 0.7, maxOutputTokens: 512 },
+    generationConfig: { temperature: 0.7, maxOutputTokens: 512, responseMimeType: "application/json" },
   };
   const res = await fetchWithTimeout(url, {
     method: "POST",
