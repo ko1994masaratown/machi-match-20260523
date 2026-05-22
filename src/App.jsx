@@ -966,8 +966,20 @@ function TownDetail({ town, userLoc, favorites, onToggleFav, onClose, isLoggedIn
   const [planConfirmed, setPlanConfirmed] = useState(false);
 
   useEffect(() => {
+    // iOS Safari では overflow:hidden だけでは body スクロールが止まらないため
+    // position:fixed + top:-scrollY で完全にロックする
+    const scrollY = window.scrollY;
     document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = ""; };
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+    return () => {
+      document.body.style.overflow = "";
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.width = "";
+      window.scrollTo(0, scrollY);
+    };
   }, []);
 
   const c = sosColor(town.sos_score);
@@ -997,7 +1009,11 @@ function TownDetail({ town, userLoc, favorites, onToggleFav, onClose, isLoggedIn
 
   return (
     <>
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+      onClick={onClose}
+      onTouchMove={e => e.stopPropagation()}
+    >
       <div
         className="bg-white w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl sm:rounded-3xl rounded-t-3xl max-h-[94vh] overflow-hidden flex flex-col shadow-2xl"
         onClick={e => e.stopPropagation()}
@@ -1124,7 +1140,7 @@ function TownDetail({ town, userLoc, favorites, onToggleFav, onClose, isLoggedIn
         </div>
 
         {/* Tab Content */}
-        <div className="flex-1 overflow-y-auto px-5 py-5">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-5">
 
           {/* 課題 */}
           {tab === "issues" && (
