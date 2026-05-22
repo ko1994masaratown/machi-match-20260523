@@ -21,29 +21,51 @@ async function fetchWithTimeout(url, options, timeout = API_TIMEOUT_MS) {
 
 // ── AI へのプロンプト生成 ────────────────────────────────────
 function buildPrompt(userInput, regions) {
-  const { themes, involvement, skills, regionImage } = userInput;
-  const regionSummaries = regions.map(r =>
-    `・${r.prefecture}${r.name}: SOS度${r.sos_score}, 課題[${r.issues?.join(",") ?? ""}], 強み[${r.strengths?.slice(0,2).join(",") ?? ""}], 参加テーマ[${r.participationThemes?.join(",") ?? ""}]`
-  ).join("\n");
+  const { themes, involvement, skills, regionImage, freeText } = userInput;
 
-  return `あなたは地域マッチングAIです。ユーザー情報と地域データをもとに最もマッチする地域を1つ選び、必ずJSON形式のみで回答してください。
+  const regionSummaries = regions.map(r => {
+    const remoteCount = r.jobs?.filter(j => j.remote).length ?? 0;
+    const spotCount   = r.jobs?.filter(j => j.period === "spot").length ?? 0;
+    const hasLong     = r.jobs?.some(j => j.period === "long");
+    return `・${r.prefecture}${r.name}
+  SOS度=${r.sos_score} 高齢化率=${r.aging_rate}% 人口=${r.population?.toLocaleString()}人
+  課題=[${r.issues?.join(",") ?? ""}]
+  強み=[${r.strengths?.slice(0, 3).join(",") ?? ""}]
+  産業=[${r.industries?.map(i => i.name).join(",") ?? ""}]
+  参加テーマ=[${r.participationThemes?.join(",") ?? ""}]
+  仕事: スポット${spotCount}件 リモート可${remoteCount}件 長期定住=${hasLong ? "あり" : "なし"}
+  移住支援=[${r.support?.slice(0, 2).join(",") ?? ""}]
+  外国人材受入=${r.foreigners_ok ? "可" : "準備中"} 家賃目安=¥${r.rent?.toLocaleString()}/月`;
+  }).join("\n");
 
-ユーザー情報:
+  const freeSection = freeText?.trim()
+    ? `\n- 本人の言葉・思い（最重視）: 「${freeText.trim()}」`
+    : "";
+
+  return `あなたは地域マッチングの専門AIです。ユーザーの価値観・思い・スキルと各地域の課題・特性を深く照合し、最もマッチする地域を1つ選んでください。
+
+【ユーザー情報】
 - 興味テーマ: ${themes.join(", ") || "未指定"}
-- 関わり方: ${involvement || "未指定"}
-- スキル: ${skills.join(", ") || "未指定"}
-- 希望地域イメージ: ${regionImage.join(", ") || "未指定"}
+- 希望する関わり方: ${involvement || "未指定"}
+- スキル・経験: ${skills.join(", ") || "未指定"}
+- 希望地域イメージ: ${regionImage.join(", ") || "未指定"}${freeSection}
 
-候補地域:
+【候補地域データ】
 ${regionSummaries}
 
-以下のJSON形式のみで回答（余分なテキスト不要）:
+【マッチング優先基準】
+1. 本人の言葉がある場合、そこに込められた価値観・背景・感情を最重視する
+2. スキルが地域の課題に直接役立つかを判定する
+3. 希望する関わり方に対応した仕事（リモート可・スポット・長期）があるかを確認する
+4. SOS度が高い地域を優先しつつ、ミスマッチは避ける
+
+以下のJSON形式のみで回答（余分なテキスト・説明は一切不要）:
 {
   "recommendedRegion": "都道府県名 市区町村名（候補から選ぶ）",
   "matchScore": 数値(50-97),
-  "reason": "マッチング理由を100文字以内で",
+  "reason": "マッチング理由を120文字以内で。ユーザーの言葉に寄り添いながら説明",
   "sosIssue": "主なSOS課題を30文字以内で",
-  "firstAction": "最初の関わり方を50文字以内で",
+  "firstAction": "最初の関わり方を具体的に60文字以内で",
   "matchType": "副業・移住・観光・企業支援・ボランティアのいずれか"
 }`;
 }

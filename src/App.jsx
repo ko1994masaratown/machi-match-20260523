@@ -1559,20 +1559,12 @@ function DartsWithMapPanel({ towns, onSelectTown }) {
             </div>
 
             {/* アクションボタン */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => onSelectTown && onSelectTown(chosenTown)}
-                className="flex-1 bg-gradient-to-r from-orange-500 to-rose-500 text-white text-xs font-bold py-2.5 rounded-xl hover:opacity-90 transition-opacity shadow-sm"
-              >
-                詳細を見る →
-              </button>
-              <button
-                onClick={() => onSelectTown && onSelectTown(chosenTown)}
-                className="flex-1 bg-white border-2 border-orange-300 text-orange-700 text-xs font-bold py-2.5 rounded-xl hover:bg-orange-50 transition-colors"
-              >
-                SOSを見る 🆘
-              </button>
-            </div>
+            <button
+              onClick={() => onSelectTown && onSelectTown(chosenTown)}
+              className="w-full bg-gradient-to-r from-orange-500 to-rose-500 text-white text-xs font-bold py-2.5 rounded-xl hover:opacity-90 transition-opacity shadow-sm"
+            >
+              詳細を見る →
+            </button>
 
             {/* Google Mapsで開くリンク */}
             <a
@@ -1699,6 +1691,7 @@ function AIRecommendPage({ towns, onSelectTown }) {
   const [involvement, setInvolvement] = useState("");
   const [skills, setSkills] = useState([]);
   const [regionImage, setRegionImage] = useState([]);
+  const [freeText, setFreeText] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
@@ -1716,7 +1709,7 @@ function AIRecommendPage({ towns, onSelectTown }) {
     setShowResult(false);
     setShowCelebration(false);
     try {
-      const userInput = { themes, involvement, skills, regionImage };
+      const userInput = { themes, involvement, skills, regionImage, freeText };
       const res = await matchRegions(userInput, towns);
       setResult(res);
       setShowCelebration(true);
@@ -1804,6 +1797,27 @@ function AIRecommendPage({ towns, onSelectTown }) {
               <label className="text-sm font-semibold text-gray-800">希望する地域イメージ <span className="text-gray-400 font-normal">（複数選択可）</span></label>
             </div>
             <TagSelector options={IMAGE_OPTIONS} selected={regionImage} onToggle={img => setRegionImage(prev => toggleTag(prev, img))} />
+          </div>
+
+          {/* Step 5: 自由記述 */}
+          <div className="bg-white rounded-2xl border border-indigo-100 shadow-sm p-5">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-7 h-7 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold flex-shrink-0">5</div>
+              <label className="text-sm font-semibold text-gray-800">あなたの思いを自由に <span className="text-gray-400 font-normal">（任意・AIが最重視）</span></label>
+            </div>
+            <p className="text-xs text-gray-400 mb-3 ml-9">選択肢では伝えきれないこと、背景、気持ちをそのまま書いてください。AIがマッチングに最大限活かします。</p>
+            <textarea
+              value={freeText}
+              onChange={e => setFreeText(e.target.value)}
+              placeholder={"例：東京の仕事に疲れて、自然の中でもっと人の役に立つことがしたい。農業の経験はないけど、体を動かすのは好き。子どもに本物の自然を見せたい気持ちもある。"}
+              rows={4}
+              maxLength={400}
+              className="w-full text-sm border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 resize-none transition-all leading-relaxed placeholder:text-gray-300"
+            />
+            <div className="flex justify-between mt-1.5">
+              <span className="text-xs text-indigo-500 font-medium">✨ 記入するとAIの精度が大幅に上がります</span>
+              <span className="text-xs text-gray-300">{freeText.length}/400</span>
+            </div>
           </div>
 
           {/* CTA */}
