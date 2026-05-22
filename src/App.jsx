@@ -2200,25 +2200,31 @@ export default function MachiMatch() {
     <div className="min-h-screen bg-slate-50" style={{ fontFamily: "'Hiragino Sans', 'Noto Sans JP', sans-serif" }}>
       {/* TOP BAR */}
       <header className="bg-white border-b border-gray-100 sticky top-0 z-40 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white text-sm font-bold shadow-sm">M</div>
-            <div>
-              <div className="font-bold text-gray-900 text-base leading-tight">Machi Match</div>
-              <div className="text-xs text-gray-400 leading-none">地域共創プラットフォーム</div>
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2">
+          {/* Brand */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-sm flex-shrink-0">
+              {/* Match logo: two overlapping circles */}
+              <svg width="20" height="16" viewBox="0 0 20 16" fill="none">
+                <circle cx="7" cy="8" r="6" fill="white" fillOpacity="0.95"/>
+                <circle cx="13" cy="8" r="6" fill="white" fillOpacity="0.55"/>
+              </svg>
             </div>
+            <span className="font-bold text-gray-900 text-sm sm:text-base whitespace-nowrap">Machi Match</span>
           </div>
-          <div className="flex items-center gap-2">
+          {/* Actions */}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
             <button
               onClick={requestGPS}
-              className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${userLoc ? "bg-emerald-500 border-emerald-400 text-white" : "border-gray-200 text-gray-500 hover:border-gray-400"}`}
+              className={`text-xs rounded-full border font-medium transition-all whitespace-nowrap ${userLoc ? "bg-emerald-500 border-emerald-400 text-white px-2.5 py-1.5" : "border-gray-200 text-gray-500 hover:border-gray-400 px-2.5 py-1.5"}`}
             >
-              {gpsLoading ? "取得中..." : userLoc ? "GPS ON" : "現在地"}
+              <span className="sm:hidden">{gpsLoading ? "…" : "📍"}</span>
+              <span className="hidden sm:inline">{gpsLoading ? "取得中..." : userLoc ? "GPS ON" : "現在地"}</span>
             </button>
             <RoleSwitcher currentRole={currentRole} onChange={setCurrentRole} />
             <button
               onClick={() => setIsLoggedIn(p => !p)}
-              className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${isLoggedIn ? "bg-indigo-600 text-white border-indigo-600" : "border-gray-200 text-gray-500 hover:border-indigo-300"}`}
+              className={`text-xs px-2.5 py-1.5 rounded-full border font-medium transition-all whitespace-nowrap ${isLoggedIn ? "bg-indigo-600 text-white border-indigo-600" : "border-gray-200 text-gray-500 hover:border-indigo-300"}`}
             >
               {isLoggedIn ? user.name.split(" ")[0] : "ログイン"}
             </button>
