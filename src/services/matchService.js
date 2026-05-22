@@ -97,7 +97,8 @@ export async function matchRegionsByGemini(userInput, regions) {
     throw new Error(`Gemini HTTP ${res.status}: ${err.slice(0, 100)}`);
   }
   const data = await res.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  const parts = data.candidates?.[0]?.content?.parts ?? [];
+  const text = parts.find(p => !p.thought)?.text ?? parts[parts.length - 1]?.text ?? "";
   return parseAIResponse(text, "Gemini");
 }
 
