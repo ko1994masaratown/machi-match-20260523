@@ -965,6 +965,11 @@ function TownDetail({ town, userLoc, favorites, onToggleFav, onClose, isLoggedIn
   const [showVisitPlan, setShowVisitPlan] = useState(false);
   const [planConfirmed, setPlanConfirmed] = useState(false);
 
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, []);
+
   const c = sosColor(town.sos_score);
   const isFav = favorites.includes(town.id);
   const dist = userLoc ? haversine(userLoc.lat, userLoc.lng, town.lat, town.lng) : null;
