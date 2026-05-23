@@ -82,10 +82,10 @@ function parseAIResponse(text, source) {
 // ── Gemini API Free Tier ───────────────────────────────────
 export async function matchRegionsByGemini(userInput, regions) {
   if (!GEMINI_API_KEY) throw new Error("VITE_GEMINI_API_KEY not set");
-  const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
   const body = {
     contents: [{ parts: [{ text: buildPrompt(userInput, regions) }] }],
-    generationConfig: { temperature: 0.7, maxOutputTokens: 512, responseMimeType: "application/json" },
+    generationConfig: { temperature: 0.7, maxOutputTokens: 1024, responseMimeType: "application/json" },
   };
   const res = await fetchWithTimeout(url, {
     method: "POST",
@@ -99,6 +99,7 @@ export async function matchRegionsByGemini(userInput, regions) {
   const data = await res.json();
   const parts = data.candidates?.[0]?.content?.parts ?? [];
   const text = parts.find(p => !p.thought)?.text ?? parts[parts.length - 1]?.text ?? "";
+  console.debug("[Gemini raw text]", text.slice(0, 300));
   return parseAIResponse(text, "Gemini");
 }
 
@@ -227,7 +228,7 @@ export async function matchRegions(userInput, regions) {
       console.info("[Machi Match] Gemini AI 推薦成功");
       return result;
     } catch (err) {
-      console.warn("[Machi Match] Gemini 失敗 →", err.message);
+      console.warn("[Machi Match] Gemini 失敗 →", err.message, err.stack);
     }
   }
 
