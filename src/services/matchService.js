@@ -108,9 +108,10 @@ export async function matchRegionsByGemini(userInput, regions) {
     contents: [{ parts: [{ text: buildPrompt(userInput, regions) }] }],
     generationConfig: {
       temperature: 0.7,
-      maxOutputTokens: 1024,
+      maxOutputTokens: 4096,
       responseMimeType: "application/json",
       responseSchema: GEMINI_RESPONSE_SCHEMA,
+      thinkingConfig: { thinkingBudget: 0 },
     },
   };
   const res = await fetchWithTimeout(url, {
