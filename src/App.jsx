@@ -1183,15 +1183,12 @@ function TownDetail({ town, userLoc, favorites, onToggleFav, onClose, isLoggedIn
                     ))}
                   </div>
                 )}
-                <div className="flex gap-2 flex-wrap">
-                  <button onClick={() => setTab("jobs")} className="text-xs bg-indigo-600 text-white px-4 py-2 rounded-xl font-medium hover:bg-indigo-700 transition-colors">
+                <div className="flex flex-col gap-3">
+                  <button onClick={() => setTab("jobs")} className="w-full bg-indigo-600 text-white px-4 py-3.5 rounded-xl font-bold hover:bg-indigo-700 transition-colors text-sm">
                     関わり方を見る →
                   </button>
-                  <button onClick={() => setShowVisitPlan(true)} className="text-xs bg-purple-600 text-white px-4 py-2 rounded-xl font-medium hover:bg-purple-700 transition-colors">
-                    📅 訪問プランを作る
-                  </button>
-                  <button onClick={() => setTab("industry")} className="text-xs border border-indigo-200 text-indigo-700 px-4 py-2 rounded-xl font-medium hover:bg-indigo-50 transition-colors">
-                    企業として相談する
+                  <button onClick={() => setShowVisitPlan(true)} className="w-full bg-purple-600 text-white px-4 py-3.5 rounded-xl font-bold hover:bg-purple-700 transition-colors text-sm">
+                    📅 訪問プランを立てる
                   </button>
                 </div>
               </div>
