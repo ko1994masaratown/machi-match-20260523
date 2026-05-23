@@ -1140,7 +1140,7 @@ function TownDetail({ town, userLoc, favorites, onToggleFav, onClose, isLoggedIn
           }}
         >
           <div className="w-10 h-1 bg-gray-300 rounded-full" />
-          <span className="text-xs text-gray-400 mt-1">{sheetExpanded ? "▼ 地図・情報を見る" : "▲ タブを広げる"}</span>
+          <span className="text-xs text-gray-400 mt-1">{sheetExpanded ? "▼ 戻る" : "▲ タブを広げる"}</span>
         </div>
 
         {/* Tabs */}
