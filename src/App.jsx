@@ -1613,6 +1613,7 @@ const THEME_OPTIONS = ["農業・食", "観光・交流", "IT・DX", "教育・�
 const SKILL_OPTIONS = ["IT・DX支援", "英語・多言語", "農業", "介護・福祉", "教育", "観光ガイド", "SNS・広報", "料理・加工", "医療", "建築・土木", "経営・経営企画"];
 const IMAGE_OPTIONS = ["海・漁村", "山・農村", "都市近郊", "離島", "温泉地", "雪国", "古民家", "自然豊か", "コンパクト"];
 const PRIORITY_OPTIONS = [
+  { key: "casual",    emoji: "🙌", label: "なんとなく！",           desc: "AIにおまかせ・迷ってる", border: "border-gray-400",    bg: "bg-gray-50",    text: "text-gray-700"    },
   { key: "sos",       emoji: "🆘", label: "SOS課題を解決したい",   desc: "スキルで地域を救う",     border: "border-red-400",     bg: "bg-red-50",     text: "text-red-700"     },
   { key: "lifestyle", emoji: "🏡", label: "暮らしを変えたい",       desc: "移住・自分らしい生活",   border: "border-emerald-400", bg: "bg-emerald-50", text: "text-emerald-700" },
   { key: "work",      emoji: "💼", label: "副業・スキル活用",       desc: "スキルを活かして稼ぐ",   border: "border-blue-400",    bg: "bg-blue-50",    text: "text-blue-700"    },
@@ -1802,7 +1803,7 @@ function AIRecommendPage({ towns, onSelectTown }) {
                 <button
                   key={key}
                   onClick={() => setMatchPriority(key)}
-                  className={`py-4 px-3 rounded-xl border-2 font-semibold transition-all text-center ${matchPriority === key ? `${border} ${bg} ${text} shadow-sm` : "border-gray-200 text-gray-500 hover:border-purple-200 bg-white"}`}
+                  className={`py-4 px-3 rounded-xl border-2 font-semibold transition-all text-center ${key === "casual" ? "col-span-2" : ""} ${matchPriority === key ? `${border} ${bg} ${text} shadow-sm` : "border-gray-200 text-gray-500 hover:border-purple-200 bg-white"}`}
                 >
                   <div className="text-2xl mb-1">{emoji}</div>
                   <div className="text-xs font-bold leading-tight">{label}</div>
