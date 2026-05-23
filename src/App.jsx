@@ -2539,13 +2539,13 @@ export default function MachiMatch() {
                     onClick={() => setSortOrder("recommended")}
                     className={`flex-shrink-0 text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${sortOrder === "recommended" ? "bg-purple-600 text-white border-purple-600" : "border-gray-200 text-gray-500 hover:border-purple-300"}`}
                   >
-                    ✨ おすすめ
+                    おすすめ
                   </button>
                   <button
                     onClick={() => setSortOrder("sos")}
                     className={`flex-shrink-0 text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${sortOrder === "sos" ? "bg-red-500 text-white border-red-500" : "border-gray-200 text-gray-500 hover:border-red-300"}`}
                   >
-                    🆘 SOS順
+                    SOS順
                   </button>
                   <div className="w-px bg-gray-200 flex-shrink-0 mx-1" />
                   {["all","spot","short","mid","long"].map(p => (
