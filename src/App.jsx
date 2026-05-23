@@ -1637,6 +1637,11 @@ function MatchResultCard({ result, resultTown, onSelectTown }) {
         <span className="text-xs text-indigo-200 bg-indigo-700/50 px-2 py-0.5 rounded-full">{result.source}</span>
       </div>
       <div className="p-5 space-y-4">
+        {result.debugError && (
+          <div className="text-xs bg-red-50 border border-red-200 rounded p-2 text-red-700 break-all">
+            🐛 Gemini失敗: {result.debugError}
+          </div>
+        )}
         {/* Region name + score */}
         <div className="flex items-start justify-between gap-3">
           <div>

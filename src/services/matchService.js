@@ -4,6 +4,20 @@
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const GROQ_API_KEY   = import.meta.env.VITE_GROQ_API_KEY;
 const API_TIMEOUT_MS = 7000;
+const GEMINI_TIMEOUT_MS = 25000;
+
+const GEMINI_RESPONSE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    recommendedRegion: { type: "STRING" },
+    matchScore:        { type: "INTEGER" },
+    reason:            { type: "STRING" },
+    sosIssue:          { type: "STRING" },
+    firstAction:       { type: "STRING" },
+    matchType:         { type: "STRING" },
+  },
+  required: ["recommendedRegion", "matchScore", "reason", "sosIssue", "firstAction", "matchType"],
+};
 
 // ── タイムアウト付き fetch ──────────────────────────────────
 async function fetchWithTimeout(url, options, timeout = API_TIMEOUT_MS) {
@@ -73,9 +87,16 @@ ${regionSummaries}
 // ── JSON 解析 ──────────────────────────────────────────────
 function parseAIResponse(text, source) {
   const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error(`No JSON in ${source} response`);
-  const parsed = JSON.parse(match[0]);
-  if (!parsed.recommendedRegion) throw new Error(`Missing recommendedRegion in ${source}`);
+  if (!match) throw new Error(`No JSON found in ${source} response (text: ${text.slice(0, 100)})`);
+  let parsed;
+  try {
+    parsed = JSON.parse(match[0]);
+  } catch (e) {
+    throw new Error(`JSON parse error in ${source}: ${e.message} (text: ${text.slice(0, 100)})`);
+  }
+  if (parsed.recommendedRegion == null || parsed.recommendedRegion === "") {
+    throw new Error(`Missing recommendedRegion in ${source} (keys: ${Object.keys(parsed).join(",")})`);
+  }
   return { ...parsed, source };
 }
 
@@ -85,21 +106,27 @@ export async function matchRegionsByGemini(userInput, regions) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
   const body = {
     contents: [{ parts: [{ text: buildPrompt(userInput, regions) }] }],
-    generationConfig: { temperature: 0.7, maxOutputTokens: 1024, responseMimeType: "application/json" },
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 1024,
+      responseMimeType: "application/json",
+      responseSchema: GEMINI_RESPONSE_SCHEMA,
+    },
   };
   const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-  });
+  }, GEMINI_TIMEOUT_MS);
   if (!res.ok) {
     const err = await res.text().catch(() => "");
-    throw new Error(`Gemini HTTP ${res.status}: ${err.slice(0, 100)}`);
+    throw new Error(`Gemini HTTP ${res.status}: ${err.slice(0, 200)}`);
   }
   const data = await res.json();
+  const finishReason = data.candidates?.[0]?.finishReason;
   const parts = data.candidates?.[0]?.content?.parts ?? [];
   const text = parts.find(p => !p.thought)?.text ?? parts[parts.length - 1]?.text ?? "";
-  console.debug("[Gemini raw text]", text.slice(0, 300));
+  if (!text) throw new Error(`Gemini empty response (finishReason=${finishReason})`);
   return parseAIResponse(text, "Gemini");
 }
 
@@ -222,13 +249,15 @@ export function matchRegionsByFallback(userInput, regions) {
 
 // ── メイン関数（Gemini→Groq→フォールバック） ─────────────────
 export async function matchRegions(userInput, regions) {
+  let geminiError = null;
   if (GEMINI_API_KEY) {
     try {
       const result = await matchRegionsByGemini(userInput, regions);
       console.info("[Machi Match] Gemini AI 推薦成功");
       return result;
     } catch (err) {
-      console.warn("[Machi Match] Gemini 失敗 →", err.message, err.stack);
+      geminiError = err.message;
+      console.warn("[Machi Match] Gemini 失敗 →", err.message);
     }
   }
 
@@ -243,5 +272,6 @@ export async function matchRegions(userInput, regions) {
   }
 
   console.info("[Machi Match] ローカルフォールバック推薦を使用");
-  return matchRegionsByFallback(userInput, regions);
+  const fallback = matchRegionsByFallback(userInput, regions);
+  return { ...fallback, debugError: geminiError };
 }
