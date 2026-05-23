@@ -2643,6 +2643,7 @@ export default function MachiMatch() {
           <CompanyDashboard
             isVerifiedCompany={isVerifiedCompany}
             onVerifyToggle={() => setIsVerifiedCompany(p => !p)}
+            towns={TOWNS}
           />
         )}
         {page === "dashboard" && currentRole === "admin" && (

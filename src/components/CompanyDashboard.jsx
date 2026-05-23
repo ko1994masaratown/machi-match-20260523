@@ -1,4 +1,14 @@
 import { useState } from "react";
+import { matchBusinessRegion } from "../services/matchService";
+
+const INDUSTRY_OPTIONS = ["IT・ソフトウェア","製造業","食品・農業","観光・ホテル","物流・運輸","医療・介護","教育","メディア・広告","金融・保険","コンサル","建設・不動産"];
+const STRENGTH_OPTIONS = ["DX・システム開発","マーケティング・SNS","多言語・インバウンド","食品加工・流通","農業技術","医療・介護技術","教育コンテンツ","観光・体験設計","物流・EC","人材育成","資金・融資"];
+const PURPOSE_OPTIONS = [
+  { key: "DX支援",    label: "DX・技術支援",    desc: "自社技術で地域課題を解決" },
+  { key: "CSR",       label: "CSR・社会貢献",   desc: "SDGs・ブランド向上" },
+  { key: "事業拡大",  label: "事業拡大・新市場",desc: "地域資源を活かした新規事業" },
+  { key: "M&A",       label: "M&A・事業承継",   desc: "地域企業を引き継ぐ" },
+];
 
 const MA_CASES = [
   {
@@ -44,6 +54,8 @@ const COLLAB_OPPS = [
     type: "DX支援",
     urgency: "高",
     details: "八ヶ岳高原ペンション組合のオンライン予約・多言語対応DX。3ヶ月プロジェクト。IT企業との協業を希望。",
+    more: "現在FAXと電話のみで予約受付。予約システム導入・多言語LP制作を期待。報酬は自治体補助金を活用予定。現地視察・合宿対応可。",
+    sdgs: [9, 11],
   },
   {
     id: "c2",
@@ -52,6 +64,8 @@ const COLLAB_OPPS = [
     type: "CSR/地域貢献",
     urgency: "緊急",
     details: "旭岳登山・写真観光向けの多言語コンテンツ制作。外国人観光客対応を企業連携で強化したい。",
+    more: "英語・中国語・韓国語対応を想定。既存の日本語パンフレットの多言語化＋SNS用ショート動画制作。観光協会との共同プロジェクト。",
+    sdgs: [11, 17],
   },
   {
     id: "c3",
@@ -60,6 +74,8 @@ const COLLAB_OPPS = [
     type: "DX支援",
     urgency: "中",
     details: "カツオ・川魚を直販するECサイトの構築支援。食品・ECノウハウを持つ企業との協業を求めています。",
+    more: "既存の道の駅販売に加え、EC直販で売上を倍増させたい。在庫管理・配送連携も含めた一気通貫のDX支援を想定。",
+    sdgs: [9, 14],
   },
   {
     id: "c4",
@@ -68,6 +84,8 @@ const COLLAB_OPPS = [
     type: "協業",
     urgency: "中",
     details: "全国ビールの原料となる遠野産ホップを活用したクラフトビール事業への連携・出資を検討する企業を探しています。",
+    more: "遠野産ホップは国内シェアの80%以上。農家との直接契約・醸造ノウハウ提供・共同ブランド立ち上げを想定したパートナーを求めています。",
+    sdgs: [8, 17],
   },
   {
     id: "c5",
@@ -76,6 +94,8 @@ const COLLAB_OPPS = [
     type: "CSR/地域貢献",
     urgency: "高",
     details: "奇跡の鉄道・只見線のインバウンド向けPR・SNS動画発信を支援する企業パートナーを求めています。",
+    more: "只見線は2011年の水害で不通→2022年全線復旧。絶景路線として国際的注目が高まっている。SNS運用・動画制作・インフルエンサー招待など幅広い協力を歓迎。",
+    sdgs: [11, 17],
   },
   {
     id: "c6",
@@ -84,6 +104,8 @@ const COLLAB_OPPS = [
     type: "DX支援",
     urgency: "中",
     details: "くじゅう連山麓の有機農場でスマート農業・ジビエ流通のDX支援を行う企業パートナーを募集。",
+    more: "センサー・IoT活用による栽培管理、ジビエ（シカ・イノシシ）の冷凍流通・ECルート開拓を検討中。農業技術・食品流通DXに強みを持つ企業を優先。",
+    sdgs: [9, 12],
   },
 ];
 
@@ -101,17 +123,265 @@ const TYPE_STYLE = {
   "M&A": "bg-slate-100 text-slate-700",
 };
 
-export default function CompanyDashboard({ isVerifiedCompany, onVerifyToggle }) {
-  const [activeTab, setActiveTab] = useState("opportunities");
+const SDG_LABELS = {
+  8:  { label: "働きがい・経済成長", color: "bg-red-700" },
+  9:  { label: "産業と技術革新",     color: "bg-orange-600" },
+  11: { label: "持続可能なまちを",   color: "bg-yellow-600" },
+  12: { label: "つくる責任",         color: "bg-amber-700" },
+  14: { label: "海の豊かさを守ろう", color: "bg-blue-600" },
+  17: { label: "パートナーシップ",   color: "bg-indigo-700" },
+};
+
+// ── 共通問い合わせモーダル ──
+function ContactModal({ title, ctaLabel = "送信する", onClose }) {
+  const [form, setForm] = useState({ company: "", name: "", email: "", message: "" });
+  const [submitted, setSubmitted] = useState(false);
+
+  function handleSubmit() {
+    if (!form.company || !form.name || !form.email) return;
+    setSubmitted(true);
+  }
+
+  if (submitted) {
+    return (
+      <ModalWrapper onClose={onClose}>
+        <div className="p-10 text-center">
+          <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center text-3xl mx-auto mb-4">✅</div>
+          <div className="text-lg font-bold text-gray-900 mb-2">送信完了！</div>
+          <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+            担当者より <strong>3営業日以内</strong> にご連絡いたします。
+          </p>
+          <button onClick={onClose} className="w-full bg-slate-700 text-white py-3 rounded-xl font-semibold hover:bg-slate-800 transition-colors">
+            閉じる
+          </button>
+        </div>
+      </ModalWrapper>
+    );
+  }
+
+  return (
+    <ModalWrapper onClose={onClose}>
+      <div className="bg-gradient-to-r from-slate-700 to-slate-900 px-6 py-4 flex items-center justify-between">
+        <div>
+          <div className="text-xs text-white/60 mb-0.5 uppercase tracking-wider">お問い合わせ</div>
+          <div className="text-white font-bold text-sm leading-snug max-w-xs">{title}</div>
+        </div>
+        <button onClick={onClose} className="text-white/60 hover:text-white text-xl leading-none w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10">✕</button>
+      </div>
+      <div className="p-6 space-y-4">
+        {[
+          { key: "company", label: "会社名", placeholder: "株式会社〇〇", type: "text" },
+          { key: "name",    label: "担当者名", placeholder: "山田 太郎",   type: "text" },
+          { key: "email",   label: "メールアドレス", placeholder: "taro@example.com", type: "email" },
+        ].map(({ key, label, placeholder, type }) => (
+          <div key={key}>
+            <label className="text-xs font-semibold text-gray-700 mb-1.5 block">{label} <span className="text-red-500">*</span></label>
+            <input
+              type={type}
+              value={form[key]}
+              onChange={e => setForm({ ...form, [key]: e.target.value })}
+              placeholder={placeholder}
+              className="w-full text-sm border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 transition-all"
+            />
+          </div>
+        ))}
+        <div>
+          <label className="text-xs font-semibold text-gray-700 mb-1.5 block">メッセージ（任意）</label>
+          <textarea
+            value={form.message}
+            onChange={e => setForm({ ...form, message: e.target.value })}
+            placeholder="ご質問・ご要望・貴社のご状況などをお気軽にご記入ください"
+            rows={3}
+            className="w-full text-sm border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100 resize-none transition-all"
+          />
+        </div>
+        <button
+          onClick={handleSubmit}
+          disabled={!form.company || !form.name || !form.email}
+          className="w-full bg-slate-700 text-white py-3 rounded-xl font-bold hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+        >
+          {ctaLabel}
+        </button>
+        <p className="text-xs text-gray-400 text-center">送信後、担当者より3営業日以内にご連絡します</p>
+      </div>
+    </ModalWrapper>
+  );
+}
+
+function ModalWrapper({ children, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ── SDGsバッジ ──
+function SdgBadges({ goals }) {
+  if (!goals || goals.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-2">
+      {goals.map(num => {
+        const g = SDG_LABELS[num];
+        if (!g) return null;
+        return (
+          <span key={num} className={`text-white text-[10px] font-bold px-2 py-0.5 rounded-full ${g.color}`}>
+            SDG{num} {g.label}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── メインコンポーネント ──
+function BusinessMatchPanel({ towns }) {
+  const [industry, setIndustry] = useState("");
+  const [strengths, setStrengths] = useState([]);
+  const [purpose, setPurpose] = useState("");
+  const [freeText, setFreeText] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+
+  function toggleStrength(s) {
+    setStrengths(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
+  }
+
+  async function handleMatch() {
+    setLoading(true);
+    setResult(null);
+    try {
+      const res = await matchBusinessRegion({ industry, strengths, purpose, freeText }, towns);
+      setResult(res);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-gradient-to-r from-slate-700 to-indigo-800 text-white rounded-2xl px-5 py-4">
+        <div className="text-sm font-bold mb-1">AIビジネスマッチング</div>
+        <p className="text-xs text-white/70">貴社の強みと目的を入力すると、AIが最適な連携地域を推薦します</p>
+      </div>
+
+      {/* 業種 */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+        <div className="text-xs font-bold text-gray-700 mb-3">業種</div>
+        <div className="flex flex-wrap gap-2">
+          {INDUSTRY_OPTIONS.map(opt => (
+            <button key={opt} onClick={() => setIndustry(opt)}
+              className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${industry === opt ? "bg-slate-700 text-white border-slate-700" : "border-gray-200 text-gray-500 hover:border-slate-400"}`}>
+              {opt}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 強み */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+        <div className="text-xs font-bold text-gray-700 mb-3">自社の強み・技術 <span className="text-gray-400 font-normal">（複数選択可）</span></div>
+        <div className="flex flex-wrap gap-2">
+          {STRENGTH_OPTIONS.map(opt => (
+            <button key={opt} onClick={() => toggleStrength(opt)}
+              className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${strengths.includes(opt) ? "bg-indigo-600 text-white border-indigo-600" : "border-gray-200 text-gray-500 hover:border-indigo-300"}`}>
+              {opt}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 目的 */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+        <div className="text-xs font-bold text-gray-700 mb-3">連携目的</div>
+        <div className="grid grid-cols-2 gap-2">
+          {PURPOSE_OPTIONS.map(({ key, label, desc }) => (
+            <button key={key} onClick={() => setPurpose(key)}
+              className={`py-3 px-3 rounded-xl border-2 text-left transition-all ${purpose === key ? "border-indigo-500 bg-indigo-50" : "border-gray-200 hover:border-indigo-200"}`}>
+              <div className={`text-xs font-bold ${purpose === key ? "text-indigo-700" : "text-gray-700"}`}>{label}</div>
+              <div className="text-xs text-gray-400 mt-0.5">{desc}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 自由記述 */}
+      <div className="bg-white rounded-2xl border border-indigo-100 shadow-sm p-4">
+        <div className="text-xs font-bold text-gray-700 mb-2">貴社からのメッセージ <span className="text-gray-400 font-normal">（任意・AIが最重視）</span></div>
+        <textarea value={freeText} onChange={e => setFreeText(e.target.value)}
+          placeholder="例：物流ネットワークを活かして産地直送を実現したい。農家との直接取引で新市場を開拓したい。"
+          rows={3} maxLength={300}
+          className="w-full text-sm border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-400 resize-none transition-all placeholder:text-gray-300" />
+      </div>
+
+      <button onClick={handleMatch} disabled={loading || (!industry && strengths.length === 0)}
+        className="w-full bg-gradient-to-r from-slate-700 to-indigo-700 text-white py-4 rounded-2xl font-bold hover:opacity-90 disabled:opacity-40 transition-all shadow-lg text-sm">
+        {loading ? "AIがビジネスマッチング中…" : "AIで最適な連携地域を探す"}
+      </button>
+
+      {result && (
+        <div className="bg-white border border-indigo-100 rounded-2xl overflow-hidden shadow-md">
+          <div className="bg-gradient-to-r from-slate-700 to-indigo-700 px-5 py-3 flex items-center justify-between">
+            <div className="text-sm font-bold text-white">AIビジネスマッチング結果</div>
+            <span className="text-xs text-indigo-200 bg-indigo-900/40 px-2 py-0.5 rounded-full">{result.source}</span>
+          </div>
+          <div className="p-5 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-xs text-gray-400 mb-0.5">推薦連携地域</div>
+                <div className="text-xl font-bold text-gray-900">{result.recommendedRegion}</div>
+              </div>
+              <div className="text-center flex-shrink-0">
+                <div className="text-3xl font-extrabold text-indigo-600">{result.matchScore}<span className="text-lg">%</span></div>
+                <div className="text-xs text-gray-400">マッチ度</div>
+              </div>
+            </div>
+            <span className="inline-block text-xs bg-slate-100 text-slate-700 font-semibold px-3 py-1 rounded-full border border-slate-200">{result.collabType}</span>
+            <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3">
+              <div className="text-xs font-semibold text-indigo-600 mb-1">貴社が貢献できること</div>
+              <p className="text-sm text-indigo-800 font-medium">{result.companyContribution}</p>
+            </div>
+            <div>
+              <div className="text-xs font-semibold text-gray-500 mb-1">マッチング理由</div>
+              <p className="text-sm text-gray-700 leading-relaxed">{result.businessReason}</p>
+            </div>
+            <div className="bg-red-50 rounded-xl px-4 py-3 border border-red-100">
+              <div className="text-xs font-semibold text-red-500 mb-0.5">解決できるSOS課題</div>
+              <p className="text-sm text-red-700 font-medium">{result.sosIssue}</p>
+            </div>
+            <div className="bg-emerald-50 rounded-xl px-4 py-3 border border-emerald-100">
+              <div className="text-xs font-semibold text-emerald-600 mb-0.5">貴社のビジネス機会</div>
+              <p className="text-sm text-emerald-800">{result.businessOpportunity}</p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function CompanyDashboard({ isVerifiedCompany, onVerifyToggle, towns = [] }) {
+  const [activeTab, setActiveTab] = useState("ai");
+  const [expandedId, setExpandedId] = useState(null);
+  const [contactModal, setContactModal] = useState(null);
 
   const tabs = [
+    { id: "ai",            label: "AIマッチ",     emoji: "✨" },
     { id: "opportunities", label: "協業・DX案件", emoji: "🤝" },
-    { id: "ma", label: "M&A・事業承継", emoji: "🏢" },
-    { id: "csr", label: "CSR・社会貢献", emoji: "🌿" },
+    { id: "ma",            label: "M&A・承継",    emoji: "🏢" },
+    { id: "csr",           label: "CSR",          emoji: "🌿" },
   ];
+
+  function toggleExpand(id) {
+    setExpandedId(prev => (prev === id ? null : id));
+  }
 
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 py-6">
+
       {/* Header */}
       <div className="mb-5">
         <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -125,24 +395,20 @@ export default function CompanyDashboard({ isVerifiedCompany, onVerifyToggle }) 
           )}
         </div>
         <h2 className="text-2xl font-bold text-gray-900">企業向け 地域連携DB</h2>
-        <p className="text-sm text-gray-500 mt-1">協業・DX支援・CSR・M&A案件を探す</p>
+        <p className="text-sm text-gray-500 mt-1">地域課題と企業資源をつなぐ入口。協業・DX・CSR・M&A案件を探す。</p>
       </div>
 
-      {/* Verification banner */}
-      <div
-        className={`rounded-2xl p-4 mb-5 border ${
-          isVerifiedCompany ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"
-        }`}
-      >
+      {/* 認証バナー */}
+      <div className={`rounded-2xl p-4 mb-5 border ${isVerifiedCompany ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`}>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className={`text-sm font-semibold ${isVerifiedCompany ? "text-emerald-800" : "text-amber-800"}`}>
+            <div className={`text-sm font-bold ${isVerifiedCompany ? "text-emerald-800" : "text-amber-800"}`}>
               {isVerifiedCompany ? "✓ 企業審査済み・NDA締結済み" : "⚠️ 企業未審査"}
             </div>
             <div className={`text-xs mt-0.5 leading-relaxed ${isVerifiedCompany ? "text-emerald-600" : "text-amber-600"}`}>
               {isVerifiedCompany
-                ? "M&A・事業承継案件の詳細情報をご覧いただけます"
-                : "詳細閲覧には企業審査とNDA同意が必要です。M&A・承継案件の詳細はロック状態です。"}
+                ? "M&A・事業承継案件の詳細情報（売価・担当者・財務情報）をすべてご覧いただけます"
+                : "M&A・事業承継案件の詳細は企業審査とNDA同意後に解放されます。協業・CSR案件はすぐにご覧いただけます。"}
             </div>
           </div>
           <button
@@ -158,7 +424,7 @@ export default function CompanyDashboard({ isVerifiedCompany, onVerifyToggle }) 
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* タブ */}
       <div className="flex gap-1 bg-gray-100 rounded-2xl p-1 mb-5">
         {tabs.map(tab => (
           <button
@@ -173,142 +439,219 @@ export default function CompanyDashboard({ isVerifiedCompany, onVerifyToggle }) 
         ))}
       </div>
 
+      {/* ── AIビジネスマッチ ── */}
+      {activeTab === "ai" && <BusinessMatchPanel towns={towns} />}
+
       {/* ── 協業・DX案件 ── */}
       {activeTab === "opportunities" && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          {COLLAB_OPPS.filter(c => c.type === "協業" || c.type === "DX支援").map(opp => (
-            <div key={opp.id} className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
-              <div className="flex flex-wrap items-center gap-1.5 mb-2">
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYPE_STYLE[opp.type]}`}>
-                  {opp.type}
-                </span>
-                <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${URGENCY_STYLE[opp.urgency]}`}>
-                  {opp.urgency}
-                </span>
+        <div>
+          <div className="bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3 mb-4 text-xs text-blue-800 leading-relaxed">
+            🤝 自社のDX技術・ノウハウを地域課題解決に活かせる案件を掲載しています。補助金活用型・プロボノ型など形式はさまざま。まずはお気軽にお問い合わせください。
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {COLLAB_OPPS.filter(c => c.type === "協業" || c.type === "DX支援").map(opp => (
+              <div key={opp.id} className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+                <div className="p-4">
+                  <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYPE_STYLE[opp.type]}`}>{opp.type}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${URGENCY_STYLE[opp.urgency]}`}>緊急度：{opp.urgency}</span>
+                  </div>
+                  <div className="text-sm font-bold text-gray-900 mb-0.5">{opp.title}</div>
+                  <div className="text-xs text-gray-500 mb-2">📍 {opp.region}</div>
+                  <div className="text-xs text-gray-600 leading-relaxed mb-3">{opp.details}</div>
+                  <SdgBadges goals={opp.sdgs} />
+
+                  {/* 詳細展開 */}
+                  {expandedId === opp.id && (
+                    <div className="mt-3 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-900 leading-relaxed">
+                      <div className="font-semibold text-blue-700 mb-1">📋 詳細情報</div>
+                      {opp.more}
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      onClick={() => toggleExpand(opp.id)}
+                      className="text-xs border border-slate-300 text-slate-700 px-4 py-2 rounded-xl font-medium hover:bg-slate-50 transition-colors"
+                    >
+                      {expandedId === opp.id ? "▲ 閉じる" : "詳細を見る"}
+                    </button>
+                    <button
+                      onClick={() => setContactModal({ title: opp.title, cta: "問い合わせを送信する" })}
+                      className="text-xs bg-slate-700 text-white px-4 py-2 rounded-xl font-medium hover:bg-slate-800 transition-colors"
+                    >
+                      問い合わせ
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div className="text-sm font-semibold text-gray-900 mb-0.5">{opp.title}</div>
-              <div className="text-xs text-gray-500 mb-2">📍 {opp.region}</div>
-              <div className="text-xs text-gray-600 leading-relaxed mb-3">{opp.details}</div>
-              <div className="flex gap-2">
-                <button className="text-xs bg-slate-700 text-white px-4 py-2 rounded-xl font-medium hover:bg-slate-800 transition-colors">
-                  詳細を見る
-                </button>
-                <button className="text-xs border border-slate-300 text-slate-600 px-4 py-2 rounded-xl font-medium hover:bg-slate-50 transition-colors">
-                  問い合わせ
-                </button>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
 
       {/* ── M&A・事業承継 ── */}
       {activeTab === "ma" && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div>
           {!isVerifiedCompany && (
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-1">
-              <div className="flex items-start gap-3">
-                <div className="text-2xl">🔒</div>
-                <div>
-                  <div className="text-sm font-semibold text-amber-800 mb-1">詳細閲覧には企業審査とNDA同意が必要です</div>
-                  <div className="text-xs text-amber-600 leading-relaxed">
-                    M&A・事業承継案件は機密性の高い情報を含みます。上部の「審査申請（デモ）」ボタンから企業審査をお申し込みください。
-                  </div>
-                </div>
+            <div className="bg-gradient-to-r from-slate-700 to-slate-900 text-white rounded-2xl p-5 mb-4 flex items-start gap-4">
+              <div className="text-3xl flex-shrink-0">🔒</div>
+              <div className="flex-1">
+                <div className="font-bold text-base mb-1">詳細閲覧には企業審査が必要です</div>
+                <p className="text-sm text-white/70 leading-relaxed mb-3">
+                  売価・財務情報・担当者連絡先などの機密情報はNDA締結済み企業のみ閲覧可能です。審査は通常3〜5営業日で完了します。
+                </p>
+                <button
+                  onClick={onVerifyToggle}
+                  className="bg-amber-400 text-slate-900 text-xs font-bold px-5 py-2.5 rounded-xl hover:bg-amber-300 transition-colors shadow-sm"
+                >
+                  審査申請（デモ）→ 詳細を解放する
+                </button>
               </div>
             </div>
           )}
 
-          {MA_CASES.map(ma => (
-            <div key={ma.id} className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-              <div className="p-4">
-                <div className="flex flex-wrap items-center gap-1.5 mb-2">
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYPE_STYLE[ma.type]}`}>
-                    {ma.type}
-                  </span>
-                  <span className="text-xs text-gray-400">📍 {ma.region}</span>
-                </div>
-                <div className="text-sm font-semibold text-gray-900 mb-1">{ma.business}</div>
-                <div className="text-xs text-gray-600 mb-3 leading-relaxed">{ma.summary}</div>
-                <div className="flex flex-wrap gap-1.5 mb-3">
-                  {ma.tags.map(tag => (
-                    <span key={tag} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{tag}</span>
-                  ))}
-                </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {MA_CASES.map(ma => (
+              <div key={ma.id} className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+                <div className="p-4">
+                  <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYPE_STYLE[ma.type]}`}>{ma.type}</span>
+                    <span className="text-xs text-gray-400">📍 {ma.region}</span>
+                  </div>
+                  <div className="text-sm font-bold text-gray-900 mb-1">{ma.business}</div>
+                  <div className="text-xs text-gray-600 mb-3 leading-relaxed">{ma.summary}</div>
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {ma.tags.map(tag => (
+                      <span key={tag} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{tag}</span>
+                    ))}
+                  </div>
 
-                {/* Detail: locked or visible */}
-                <div className="bg-gray-50 rounded-xl p-3 mb-3">
-                  <div className="text-xs text-gray-400 mb-1.5 font-semibold">従業員数</div>
-                  <div className="text-sm font-medium text-gray-700">{ma.employees}</div>
-                </div>
+                  {/* 従業員数 */}
+                  <div className="bg-gray-50 rounded-xl px-3 py-2.5 mb-3">
+                    <div className="text-xs text-gray-400 mb-0.5">従業員数</div>
+                    <div className="text-sm font-semibold text-gray-700">{ma.employees}</div>
+                  </div>
 
-                {isVerifiedCompany ? (
-                  <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 mb-3">
-                    <div className="text-xs font-semibold text-emerald-700 mb-1.5 flex items-center gap-1">
-                      <span>✓</span> 詳細情報（NDA締結済み）
+                  {/* 詳細情報：ロック or 解放 */}
+                  {isVerifiedCompany ? (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 mb-3">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 mb-1.5">
+                        <span>✓</span> 詳細情報（NDA締結済み・機密）
+                      </div>
+                      <p className="text-xs text-emerald-900 leading-relaxed">{ma.detail}</p>
                     </div>
-                    <p className="text-xs text-emerald-800 leading-relaxed">{ma.detail}</p>
-                  </div>
-                ) : (
-                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 mb-3 flex items-center gap-2 text-gray-400">
-                    <span>🔒</span>
-                    <span className="text-xs">企業審査・NDA同意後に詳細が閲覧できます</span>
-                  </div>
-                )}
+                  ) : (
+                    <div className="relative rounded-xl overflow-hidden mb-3">
+                      <div className="bg-gray-100 px-3 py-2.5 blur-sm select-none text-xs text-gray-600 leading-relaxed">
+                        {ma.detail}
+                      </div>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/70 backdrop-blur-[2px]">
+                        <span className="text-lg mb-1">🔒</span>
+                        <span className="text-xs font-semibold text-gray-600">審査後に詳細を閲覧できます</span>
+                      </div>
+                    </div>
+                  )}
 
-                <div className="flex gap-2">
-                  <button
-                    className={`text-xs px-4 py-2 rounded-xl font-semibold transition-colors ${
-                      isVerifiedCompany
-                        ? "bg-slate-700 text-white hover:bg-slate-800"
-                        : "bg-gray-200 text-gray-400 cursor-not-allowed"
-                    }`}
-                    disabled={!isVerifiedCompany}
-                  >
-                    {isVerifiedCompany ? "M&A相談を申込む" : "審査後に利用可"}
-                  </button>
-                  <button className="text-xs border border-gray-200 text-gray-600 px-4 py-2 rounded-xl font-medium hover:bg-gray-50 transition-colors">
-                    概要資料を請求
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() =>
+                        isVerifiedCompany
+                          ? setContactModal({ title: `M&A相談：${ma.business}`, cta: "M&A相談を申し込む" })
+                          : onVerifyToggle()
+                      }
+                      className={`text-xs px-4 py-2 rounded-xl font-semibold transition-colors ${
+                        isVerifiedCompany
+                          ? "bg-slate-700 text-white hover:bg-slate-800"
+                          : "bg-amber-500 text-white hover:bg-amber-600"
+                      }`}
+                    >
+                      {isVerifiedCompany ? "M&A相談を申込む" : "🔓 審査申請する"}
+                    </button>
+                    <button
+                      onClick={() => setContactModal({ title: `概要資料請求：${ma.business}`, cta: "資料を請求する" })}
+                      className="text-xs border border-gray-200 text-gray-600 px-4 py-2 rounded-xl font-medium hover:bg-gray-50 transition-colors"
+                    >
+                      概要資料を請求
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
 
       {/* ── CSR・社会貢献 ── */}
       {activeTab === "csr" && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-100 rounded-2xl p-4 mb-1">
-            <p className="text-sm text-green-800 leading-relaxed">
-              🌿 地域課題解決への参加は、企業のCSR・SDGs対応・従業員エンゲージメント向上にもつながります。
-            </p>
-          </div>
-          {COLLAB_OPPS.filter(c => c.type === "CSR/地域貢献").map(opp => (
-            <div key={opp.id} className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
-              <div className="flex flex-wrap items-center gap-1.5 mb-2">
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYPE_STYLE[opp.type]}`}>
-                  {opp.type}
-                </span>
-                <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${URGENCY_STYLE[opp.urgency]}`}>
-                  {opp.urgency}
-                </span>
-              </div>
-              <div className="text-sm font-semibold text-gray-900 mb-0.5">{opp.title}</div>
-              <div className="text-xs text-gray-500 mb-2">📍 {opp.region}</div>
-              <div className="text-xs text-gray-600 leading-relaxed mb-3">{opp.details}</div>
-              <div className="flex gap-2">
-                <button className="text-xs bg-green-700 text-white px-4 py-2 rounded-xl font-medium hover:bg-green-800 transition-colors">
-                  CSR参加を相談する
-                </button>
-                <button className="text-xs border border-gray-200 text-gray-600 px-4 py-2 rounded-xl font-medium hover:bg-gray-50 transition-colors">
-                  詳細を見る
-                </button>
-              </div>
+        <div>
+          {/* 企業メリットカード */}
+          <div className="bg-gradient-to-br from-green-700 to-emerald-800 text-white rounded-2xl p-5 mb-4">
+            <div className="text-sm font-bold mb-3">🌿 地域課題への参加が、企業価値を高める</div>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { emoji: "📊", label: "SDGs対応",   sub: "ESGレポートに活用できる" },
+                { emoji: "👥", label: "社員研修",    sub: "地域での体験が人材育成に" },
+                { emoji: "📣", label: "PR・ブランド", sub: "社会課題解決のストーリーを発信" },
+              ].map(({ emoji, label, sub }) => (
+                <div key={label} className="bg-white/15 rounded-xl p-3 text-center">
+                  <div className="text-2xl mb-1">{emoji}</div>
+                  <div className="text-xs font-bold">{label}</div>
+                  <div className="text-[10px] text-white/70 mt-0.5 leading-snug">{sub}</div>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {COLLAB_OPPS.filter(c => c.type === "CSR/地域貢献").map(opp => (
+              <div key={opp.id} className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+                <div className="p-4">
+                  <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYPE_STYLE[opp.type]}`}>{opp.type}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${URGENCY_STYLE[opp.urgency]}`}>緊急度：{opp.urgency}</span>
+                  </div>
+                  <div className="text-sm font-bold text-gray-900 mb-0.5">{opp.title}</div>
+                  <div className="text-xs text-gray-500 mb-2">📍 {opp.region}</div>
+                  <div className="text-xs text-gray-600 leading-relaxed mb-2">{opp.details}</div>
+                  <SdgBadges goals={opp.sdgs} />
+
+                  {/* 詳細展開 */}
+                  {expandedId === opp.id && (
+                    <div className="mt-3 bg-green-50 border border-green-100 rounded-xl px-4 py-3 text-xs text-green-900 leading-relaxed">
+                      <div className="font-semibold text-green-700 mb-1">📋 詳細情報</div>
+                      {opp.more}
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      onClick={() => toggleExpand(opp.id)}
+                      className="text-xs border border-gray-200 text-gray-600 px-4 py-2 rounded-xl font-medium hover:bg-gray-50 transition-colors"
+                    >
+                      {expandedId === opp.id ? "▲ 閉じる" : "詳細を見る"}
+                    </button>
+                    <button
+                      onClick={() => setContactModal({ title: opp.title, cta: "CSR参加を相談する" })}
+                      className="text-xs bg-green-700 text-white px-4 py-2 rounded-xl font-medium hover:bg-green-800 transition-colors"
+                    >
+                      CSR参加を相談する
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
+      )}
+
+      {/* 問い合わせモーダル */}
+      {contactModal && (
+        <ContactModal
+          title={contactModal.title}
+          ctaLabel={contactModal.cta}
+          onClose={() => setContactModal(null)}
+        />
       )}
     </div>
   );

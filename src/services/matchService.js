@@ -306,3 +306,112 @@ export async function matchRegions(userInput, regions) {
   const fallback = matchRegionsByFallback(userInput, regions);
   return { ...fallback, debugError: geminiError };
 }
+
+// ── 企業向けビジネスマッチ ────────────────────────────────────
+const BUSINESS_RESPONSE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    recommendedRegion:  { type: "STRING" },
+    matchScore:         { type: "INTEGER" },
+    businessReason:     { type: "STRING" },
+    sosIssue:           { type: "STRING" },
+    businessOpportunity:{ type: "STRING" },
+    collabType:         { type: "STRING" },
+    companyContribution:{ type: "STRING" },
+  },
+  required: ["recommendedRegion","matchScore","businessReason","sosIssue","businessOpportunity","collabType","companyContribution"],
+};
+
+function buildBusinessPrompt(companyInput, regions) {
+  const { industry, strengths, purpose, freeText } = companyInput;
+
+  const regionSummaries = regions.map(r => {
+    const collabTypes = [...new Set(r.jobs?.map(j => j.type) ?? [])].slice(0, 3).join(",");
+    return `・${r.prefecture}${r.name}
+  SOS度=${r.sos_score} 課題=[${r.issues?.join(",") ?? ""}]
+  強み=[${r.strengths?.slice(0,3).join(",") ?? ""}]
+  産業=[${r.industries?.map(i => i.name).join(",") ?? ""}]
+  参加テーマ=[${r.participationThemes?.join(",") ?? ""}]
+  企業連携実績=[${r.industry_partners?.map(p => p.category).join(",") ?? "なし"}]
+  関わり方=[${collabTypes}]`;
+  }).join("\n");
+
+  const freeSection = freeText?.trim() ? `\n- 企業からのメッセージ: 「${freeText.trim()}」` : "";
+
+  return `あなたは地域ビジネスマッチングの専門AIです。企業の強み・目的と地域の課題・産業特性を照合し、最も事業シナジーが高い地域を1つ選んでください。
+
+【企業情報】
+- 業種: ${industry || "未指定"}
+- 強み・技術: ${strengths.join(", ") || "未指定"}
+- 連携目的: ${purpose || "未指定"}${freeSection}
+
+【候補地域データ】
+${regionSummaries}
+
+【ビジネスマッチング優先基準】
+1. 企業の強みが地域のSOS課題を直接解決できるか（最重視）
+2. 企業の業種・技術と地域産業・参加テーマの接続性
+3. 事業拡大・新市場開拓の可能性（企業側の利益）
+4. SOS度が高い地域で企業貢献インパクトが大きいか
+companyContributionは「貴社の[強み]が、この地域の[具体的SOS課題]を[どう解決するか]」を60文字以内で。
+businessOpportunityは「企業側が得られるビジネス機会」を50文字以内で。`;
+}
+
+export async function matchBusinessRegion(companyInput, regions) {
+  if (!GEMINI_API_KEY) {
+    return businessFallback(companyInput, regions);
+  }
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    const body = {
+      contents: [{ parts: [{ text: buildBusinessPrompt(companyInput, regions) }] }],
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 4096,
+        responseMimeType: "application/json",
+        responseSchema: BUSINESS_RESPONSE_SCHEMA,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    };
+    const res = await fetchWithTimeout(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }, GEMINI_TIMEOUT_MS);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const parts = data.candidates?.[0]?.content?.parts ?? [];
+    const text = parts.find(p => !p.thought)?.text ?? parts[parts.length - 1]?.text ?? "";
+    if (!text) throw new Error("empty response");
+    const parsed = JSON.parse(text);
+    if (!parsed.recommendedRegion) throw new Error("missing recommendedRegion");
+    return { ...parsed, source: "Gemini" };
+  } catch (err) {
+    console.warn("[Machi Match Business] Gemini 失敗 →", err.message);
+    return businessFallback(companyInput, regions);
+  }
+}
+
+function businessFallback(companyInput, regions) {
+  const { strengths, purpose } = companyInput;
+  const scored = regions.map(r => {
+    let score = r.sos_score * 0.5;
+    strengths.forEach(s => {
+      if (r.issues?.some(i => i.includes(s))) score += 20;
+      if (r.participationThemes?.some(p => p.includes(s))) score += 15;
+      if (r.industries?.some(i => i.name.includes(s))) score += 10;
+    });
+    return { region: r, score };
+  }).sort((a, b) => b.score - a.score);
+  const r = scored[0].region;
+  return {
+    recommendedRegion: `${r.prefecture} ${r.name}`,
+    matchScore: Math.min(Math.round(scored[0].score), 97),
+    businessReason: `${strengths.slice(0,2).join("・")}の強みが、${r.issues?.[0] ?? "地域課題"}に取り組む${r.name}と高いシナジーがあります。`,
+    sosIssue: r.issues?.slice(0,2).join("・") ?? "人材・後継者不足",
+    businessOpportunity: `${purpose || "地域連携"}による新市場・CSR実績の獲得`,
+    collabType: purpose ?? "DX支援",
+    companyContribution: `${strengths[0] ?? "技術"}で${r.issues?.[0] ?? "地域課題"}を解決`,
+    source: "ローカル",
+  };
+}
