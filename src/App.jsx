@@ -2556,12 +2556,6 @@ export default function MachiMatch() {
                   ))}
                   <div className="w-px bg-gray-200 flex-shrink-0 mx-1" />
                   <button
-                    onClick={() => setOnlyWithSpot(p => !p)}
-                    className={`flex-shrink-0 text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${onlyWithSpot ? "bg-orange-500 text-white border-orange-500" : "border-gray-200 text-gray-500 hover:border-orange-300"}`}
-                  >
-                    単発あり
-                  </button>
-                  <button
                     onClick={() => setOnlyWithGift(p => !p)}
                     className={`flex-shrink-0 text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${onlyWithGift ? "bg-amber-500 text-white border-amber-500" : "border-gray-200 text-gray-500 hover:border-amber-300"}`}
                   >
