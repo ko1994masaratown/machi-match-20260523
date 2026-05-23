@@ -964,6 +964,8 @@ function TownDetail({ town, userLoc, favorites, onToggleFav, onClose, isLoggedIn
   const [aiLoading, setAiLoading] = useState(false);
   const [showVisitPlan, setShowVisitPlan] = useState(false);
   const [planConfirmed, setPlanConfirmed] = useState(false);
+  const [sheetExpanded, setSheetExpanded] = useState(false);
+  const dragStartY = useRef(0);
 
   useEffect(() => {
     // iOS Safari では overflow:hidden だけでは body スクロールが止まらないため
@@ -1018,8 +1020,8 @@ function TownDetail({ town, userLoc, favorites, onToggleFav, onClose, isLoggedIn
         className="bg-white w-full sm:max-w-xl md:max-w-2xl lg:max-w-3xl sm:rounded-3xl rounded-t-3xl max-h-[94vh] overflow-hidden flex flex-col shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
-        {/* Hero image header */}
-        <div className="relative flex-shrink-0">
+        {/* Hero image header — collapses when sheet expanded */}
+        <div className={`relative flex-shrink-0 transition-all duration-300 overflow-hidden ${sheetExpanded ? "max-h-0" : "max-h-[600px]"}`}>
           <div className="relative h-48 sm:h-56 overflow-hidden">
             {/* Fallback gradient */}
             <div className={`absolute inset-0 ${c.label === "緊急" ? "bg-gradient-to-br from-red-700 to-rose-600" : "bg-gradient-to-br from-indigo-700 to-purple-700"}`} />
@@ -1124,6 +1126,21 @@ function TownDetail({ town, userLoc, favorites, onToggleFav, onClose, isLoggedIn
           >
             {aiLoading ? "生成中…" : "✨ AI紹介"}
           </button>
+        </div>
+
+        {/* Drag handle — pull up to expand content area */}
+        <div
+          className="flex-shrink-0 flex flex-col items-center justify-center py-2 cursor-pointer select-none bg-white border-b border-gray-100 active:bg-gray-50 transition-colors"
+          onClick={() => setSheetExpanded(p => !p)}
+          onTouchStart={e => { dragStartY.current = e.touches[0].clientY; }}
+          onTouchEnd={e => {
+            const dy = dragStartY.current - e.changedTouches[0].clientY;
+            if (dy > 20) setSheetExpanded(true);
+            if (dy < -20) setSheetExpanded(false);
+          }}
+        >
+          <div className="w-10 h-1 bg-gray-300 rounded-full" />
+          <span className="text-xs text-gray-400 mt-1">{sheetExpanded ? "▼ 地図・情報を見る" : "▲ タブを広げる"}</span>
         </div>
 
         {/* Tabs */}
@@ -1595,6 +1612,12 @@ function DartsWithMapPanel({ towns, onSelectTown }) {
 const THEME_OPTIONS = ["農業・食", "観光・交流", "IT・DX", "教育・子育て", "医療・福祉", "自然・環境", "伝統工芸", "移住定住", "企業誘致"];
 const SKILL_OPTIONS = ["IT・DX支援", "英語・多言語", "農業", "介護・福祉", "教育", "観光ガイド", "SNS・広報", "料理・加工", "医療", "建築・土木", "経営・経営企画"];
 const IMAGE_OPTIONS = ["海・漁村", "山・農村", "都市近郊", "離島", "温泉地", "雪国", "古民家", "自然豊か", "コンパクト"];
+const PRIORITY_OPTIONS = [
+  { key: "sos",       emoji: "🆘", label: "SOS課題を解決したい",   desc: "スキルで地域を救う",     border: "border-red-400",     bg: "bg-red-50",     text: "text-red-700"     },
+  { key: "lifestyle", emoji: "🏡", label: "暮らしを変えたい",       desc: "移住・自分らしい生活",   border: "border-emerald-400", bg: "bg-emerald-50", text: "text-emerald-700" },
+  { key: "work",      emoji: "💼", label: "副業・スキル活用",       desc: "スキルを活かして稼ぐ",   border: "border-blue-400",    bg: "bg-blue-50",    text: "text-blue-700"    },
+  { key: "volunteer", emoji: "🤝", label: "ボランティア・社会貢献", desc: "社会貢献・助け合い",     border: "border-orange-400",  bg: "bg-orange-50",  text: "text-orange-700"  },
+];
 const INVOLVEMENT_OPTIONS = [
   { key: "移住したい",        label: "移住したい",        emoji: "🏡", sub: "定住・就職" },
   { key: "副業で関わりたい",   label: "副業で関わりたい",   emoji: "💼", sub: "リモート可" },
@@ -1665,6 +1688,14 @@ function MatchResultCard({ result, resultTown, onSelectTown }) {
           <p className="text-sm text-gray-700 leading-relaxed">{result.reason}</p>
         </div>
 
+        {/* User contribution (priority-matched) */}
+        {result.userContribution && (
+          <div className="bg-indigo-50 rounded-xl px-4 py-3 border border-indigo-200">
+            <div className="text-xs font-semibold text-indigo-600 mb-0.5">あなたが貢献できること</div>
+            <p className="text-sm text-indigo-800 font-medium">{result.userContribution}</p>
+          </div>
+        )}
+
         {/* SOS issue */}
         <div className="bg-red-50 rounded-xl px-4 py-3 border border-red-100">
           <div className="text-xs font-semibold text-red-500 mb-0.5">この地域のSOS課題</div>
@@ -1692,6 +1723,7 @@ function MatchResultCard({ result, resultTown, onSelectTown }) {
 }
 
 function AIRecommendPage({ towns, onSelectTown }) {
+  const [matchPriority, setMatchPriority] = useState("");
   const [themes, setThemes] = useState([]);
   const [involvement, setInvolvement] = useState("");
   const [skills, setSkills] = useState([]);
@@ -1714,7 +1746,7 @@ function AIRecommendPage({ towns, onSelectTown }) {
     setShowResult(false);
     setShowCelebration(false);
     try {
-      const userInput = { themes, involvement, skills, regionImage, freeText };
+      const userInput = { themes, involvement, skills, regionImage, freeText, matchPriority };
       const res = await matchRegions(userInput, towns);
       setResult(res);
       setShowCelebration(true);
@@ -1755,6 +1787,30 @@ function AIRecommendPage({ towns, onSelectTown }) {
 
         {/* LEFT: form (3/5) */}
         <div className="lg:col-span-3 space-y-4">
+
+          {/* Step 0: 優先軸選択 */}
+          <div className="bg-white rounded-2xl border-2 border-purple-200 shadow-sm p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-7 h-7 rounded-full bg-purple-600 text-white text-xs flex items-center justify-center font-bold flex-shrink-0">★</div>
+              <div>
+                <label className="text-sm font-semibold text-gray-800">まず、あなたの目的を教えてください</label>
+                <p className="text-xs text-gray-400 mt-0.5">選択によってAIのマッチングロジックが変わります</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {PRIORITY_OPTIONS.map(({ key, emoji, label, desc, border, bg, text }) => (
+                <button
+                  key={key}
+                  onClick={() => setMatchPriority(key)}
+                  className={`py-4 px-3 rounded-xl border-2 font-semibold transition-all text-center ${matchPriority === key ? `${border} ${bg} ${text} shadow-sm` : "border-gray-200 text-gray-500 hover:border-purple-200 bg-white"}`}
+                >
+                  <div className="text-2xl mb-1">{emoji}</div>
+                  <div className="text-xs font-bold leading-tight">{label}</div>
+                  <div className={`text-xs mt-1 ${matchPriority === key ? "opacity-80" : "text-gray-400"}`}>{desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Step 1: 興味テーマ */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">

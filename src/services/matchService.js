@@ -15,8 +15,35 @@ const GEMINI_RESPONSE_SCHEMA = {
     sosIssue:          { type: "STRING" },
     firstAction:       { type: "STRING" },
     matchType:         { type: "STRING" },
+    userContribution:  { type: "STRING" },
   },
-  required: ["recommendedRegion", "matchScore", "reason", "sosIssue", "firstAction", "matchType"],
+  required: ["recommendedRegion", "matchScore", "reason", "sosIssue", "firstAction", "matchType", "userContribution"],
+};
+
+const PRIORITY_CRITERIA = {
+  sos: (skills) =>
+    `【最優先ロジック: SOS課題解決型】
+ユーザーのスキル(${skills.join(",") || "未指定"})が地域のSOS課題・参加テーマに直接一致する地域を必ず選ぶ。
+スキルと課題の直接的な接続が最重要。SOS度の高さも重視。ライフスタイルは副次条件。
+userContributionには「${skills.join("・")}スキルが、この地域の[具体的なSOS課題名]に直接役立つ理由」を50文字以内で書く。`,
+
+  lifestyle: (skills, regionImage, freeText) =>
+    `【最優先ロジック: ライフスタイル型】
+ユーザーの自由記述「${freeText || "未記入"}」と希望地域イメージ(${regionImage.join(",") || "未指定"})への適合を最重視。
+地域の雰囲気・自然環境・暮らしやすさを優先。スキル×SOS接続は副次条件。
+userContributionには「この地域でのあなたらしい暮らし方・関わり方」を50文字以内で書く。`,
+
+  work: (skills, _regionImage, _freeText, involvement) =>
+    `【最優先ロジック: 副業・スキル活用型】
+ユーザーのスキル(${skills.join(",") || "未指定"})を活かせるリモート可・副業案件が豊富な地域を必ず選ぶ。
+実際の仕事の有無（リモート可件数・スポット件数）を最重視。関わり方の希望(${involvement || "未指定"})に合致することが必須。
+userContributionには「${skills.join("・")}スキルで稼げる・活かせる具体的な仕事機会」を50文字以内で書く。`,
+
+  volunteer: () =>
+    `【最優先ロジック: ボランティア・社会貢献型】
+SOS度が最も高い・緊急性の高い地域を最優先で選ぶ。短期・スポット・ボランティア案件があることを必ず確認。
+社会的インパクトと関わりやすさを重視。
+userContributionには「この地域のどのSOS課題にどう貢献できるか」を50文字以内で書く。`,
 };
 
 // ── タイムアウト付き fetch ──────────────────────────────────
@@ -35,7 +62,7 @@ async function fetchWithTimeout(url, options, timeout = API_TIMEOUT_MS) {
 
 // ── AI へのプロンプト生成 ────────────────────────────────────
 function buildPrompt(userInput, regions) {
-  const { themes, involvement, skills, regionImage, freeText } = userInput;
+  const { themes, involvement, skills, regionImage, freeText, matchPriority } = userInput;
 
   const regionSummaries = regions.map(r => {
     const remoteCount = r.jobs?.filter(j => j.remote).length ?? 0;
@@ -53,10 +80,19 @@ function buildPrompt(userInput, regions) {
   }).join("\n");
 
   const freeSection = freeText?.trim()
-    ? `\n- 本人の言葉・思い（最重視）: 「${freeText.trim()}」`
+    ? `\n- 本人の言葉・思い: 「${freeText.trim()}」`
     : "";
 
-  return `あなたは地域マッチングの専門AIです。ユーザーの価値観・思い・スキルと各地域の課題・特性を深く照合し、最もマッチする地域を1つ選んでください。
+  const prioritySection = PRIORITY_CRITERIA[matchPriority]
+    ? `\n${PRIORITY_CRITERIA[matchPriority](skills, regionImage, freeText, involvement ?? "")}`
+    : `\n【マッチング優先基準】
+1. 本人の言葉がある場合、その価値観・感情を重視する
+2. スキルが地域の課題に直接役立つかを判定する
+3. 希望する関わり方に対応した仕事があるかを確認する
+4. SOS度が高い地域を優先しつつ、ミスマッチは避ける`;
+
+  return `あなたは地域マッチングの専門AIです。ユーザーの価値観・スキルと各地域の課題・特性を照合し、最もマッチする地域を1つ選んでください。
+${prioritySection}
 
 【ユーザー情報】
 - 興味テーマ: ${themes.join(", ") || "未指定"}
@@ -65,23 +101,7 @@ function buildPrompt(userInput, regions) {
 - 希望地域イメージ: ${regionImage.join(", ") || "未指定"}${freeSection}
 
 【候補地域データ】
-${regionSummaries}
-
-【マッチング優先基準】
-1. 本人の言葉がある場合、そこに込められた価値観・背景・感情を最重視する
-2. スキルが地域の課題に直接役立つかを判定する
-3. 希望する関わり方に対応した仕事（リモート可・スポット・長期）があるかを確認する
-4. SOS度が高い地域を優先しつつ、ミスマッチは避ける
-
-以下のJSON形式のみで回答（余分なテキスト・説明は一切不要）:
-{
-  "recommendedRegion": "都道府県名 市区町村名（候補から選ぶ）",
-  "matchScore": 数値(50-97),
-  "reason": "マッチング理由を120文字以内で。ユーザーの言葉に寄り添いながら説明",
-  "sosIssue": "主なSOS課題を30文字以内で",
-  "firstAction": "最初の関わり方を具体的に60文字以内で",
-  "matchType": "副業・移住・観光・企業支援・ボランティアのいずれか"
-}`;
+${regionSummaries}`;
 }
 
 // ── JSON 解析 ──────────────────────────────────────────────
@@ -156,9 +176,18 @@ export async function matchRegionsByGroq(userInput, regions) {
   return parseAIResponse(text, "Groq");
 }
 
-// ── スコアリング（フォールバック用） ──────────────────────────
+// ── スコアリング（フォールバック用・priority重み付き） ──────────
 export function calculateMatchScore(userInput, region) {
-  const { themes, skills, involvement, regionImage } = userInput;
+  const { themes, skills, involvement, regionImage, matchPriority } = userInput;
+
+  // priority別の重み係数
+  const W = {
+    sos:       { theme: 0.5, skill: 3.0, inv: 1.0, img: 0.3, sos: 2.5 },
+    lifestyle: { theme: 1.0, skill: 0.5, inv: 1.0, img: 3.0, sos: 0.5 },
+    work:      { theme: 0.8, skill: 2.0, inv: 3.0, img: 0.5, sos: 0.5 },
+    volunteer: { theme: 0.5, skill: 0.5, inv: 1.0, img: 0.5, sos: 4.0 },
+  }[matchPriority] ?? { theme: 1, skill: 1, inv: 1, img: 1, sos: 1 };
+
   let score = 0;
 
   // 興味テーマ一致 (最大20点)
@@ -167,7 +196,7 @@ export function calculateMatchScore(userInput, region) {
     region.industries?.some(i => i.name.includes(t) || i.detail.includes(t)) ||
     region.participationThemes?.some(p => p.includes(t))
   );
-  score += Math.min(themeHits.length * 7, 20);
+  score += Math.min(themeHits.length * 7 * W.theme, 20);
 
   // スキル × 地域ニーズ一致 (最大25点)
   const skillHits = skills.filter(s =>
@@ -175,21 +204,21 @@ export function calculateMatchScore(userInput, region) {
     region.participationThemes?.some(p => p.includes(s)) ||
     region.industry_partners?.some(p => p.tech?.some(t => t.includes(s)))
   );
-  score += Math.min(skillHits.length * 9, 25);
+  score += Math.min(skillHits.length * 9 * W.skill, 25);
 
   // 関わり方一致 (最大25点)
   const invMap = {
-    "移住したい":        ["long"],
-    "副業で関わりたい":   ["mid", "remote"],
-    "ボランティアしたい": ["short"],
-    "旅行から始めたい":   ["spot"],
+    "移住したい":          ["long"],
+    "副業で関わりたい":     ["mid", "remote"],
+    "ボランティアしたい":   ["short"],
+    "旅行から始めたい":     ["spot"],
     "企業として支援したい": ["mid", "long"],
   };
   const invKeys = invMap[involvement] ?? [];
   const invHit = region.jobs?.some(j =>
     invKeys.includes(j.period) || (j.remote && invKeys.includes("remote"))
   );
-  score += invHit ? 25 : 10;
+  score += (invHit ? 25 : 10) * W.inv;
 
   // 地域イメージ一致 (最大20点)
   const imgHits = regionImage.filter(img =>
@@ -197,10 +226,11 @@ export function calculateMatchScore(userInput, region) {
     region.catchCopy?.includes(img) ||
     region.sosSummary?.includes(img)
   );
-  score += Math.min(imgHits.length * 7, 20);
+  score += Math.min(imgHits.length * 7 * W.img, 20);
 
   // SOS緊急度ボーナス (最大10点)
-  score += region.sos_score >= 90 ? 10 : region.sos_score >= 80 ? 6 : 3;
+  const sosBase = region.sos_score >= 90 ? 10 : region.sos_score >= 80 ? 6 : 3;
+  score += sosBase * W.sos;
 
   return Math.min(Math.round(score), 97);
 }
