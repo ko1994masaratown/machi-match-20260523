@@ -2201,6 +2201,7 @@ export default function MachiMatch() {
   const [onlyWithGift, setOnlyWithGift] = useState(false);
   const [travelFilter, setTravelFilter] = useState(0); // 0=off
   const [showDartsModal, setShowDartsModal] = useState(false);
+  const [sortOrder, setSortOrder] = useState("recommended");
   const [scheduledPlans, setScheduledPlans] = useState(() => {
     try { return JSON.parse(localStorage.getItem("machiMatchPlans") || "[]"); } catch { return []; }
   });
@@ -2244,7 +2245,17 @@ export default function MachiMatch() {
   if (onlyWithSpot) towns = towns.filter(t => t.jobs.some(j => j.period === "spot"));
   if (onlyWithGift) towns = towns.filter(t => t.gifts.length > 0);
   if (travelFilter > 0 && userLoc) towns = towns.filter(t => haversine(userLoc.lat, userLoc.lng, t.lat, t.lng) / 80 <= travelFilter);
-  towns.sort((a, b) => b.sos_score - a.sos_score);
+  if (sortOrder === "sos") {
+    towns.sort((a, b) => b.sos_score - a.sos_score);
+  } else {
+    // おすすめ: お気に入り優先 → SOS × 仕事数の複合スコア
+    towns.sort((a, b) => {
+      const favBoost = (id) => favorites.includes(id) ? 120 : 0;
+      const scoreA = favBoost(a.id) + a.sos_score * 0.5 + a.jobs.length * 4;
+      const scoreB = favBoost(b.id) + b.sos_score * 0.5 + b.jobs.length * 4;
+      return scoreB - scoreA;
+    });
+  }
 
   const roleDashboardNav =
     currentRole === "municipality" ? { id: "dashboard", icon: "🏛️", label: "自治体管理" }
@@ -2523,6 +2534,20 @@ export default function MachiMatch() {
                   className="w-full text-sm border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all"
                 />
                 <div className="flex gap-2 overflow-x-auto pb-0.5">
+                  {/* 並び替え */}
+                  <button
+                    onClick={() => setSortOrder("recommended")}
+                    className={`flex-shrink-0 text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${sortOrder === "recommended" ? "bg-purple-600 text-white border-purple-600" : "border-gray-200 text-gray-500 hover:border-purple-300"}`}
+                  >
+                    ✨ おすすめ
+                  </button>
+                  <button
+                    onClick={() => setSortOrder("sos")}
+                    className={`flex-shrink-0 text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${sortOrder === "sos" ? "bg-red-500 text-white border-red-500" : "border-gray-200 text-gray-500 hover:border-red-300"}`}
+                  >
+                    🆘 SOS順
+                  </button>
+                  <div className="w-px bg-gray-200 flex-shrink-0 mx-1" />
                   {["all","spot","short","mid","long"].map(p => (
                     <button
                       key={p}
@@ -2585,7 +2610,12 @@ export default function MachiMatch() {
             {/* Town grid */}
             <div className="px-4 sm:px-6 lg:px-8 pb-6">
               <div className="flex items-center justify-between mb-4">
-                <div className="text-sm font-semibold text-gray-700">{towns.length}自治体</div>
+                <div className="flex items-center gap-2">
+                  <div className="text-sm font-semibold text-gray-700">{towns.length}自治体</div>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sortOrder === "sos" ? "bg-red-50 text-red-600 border border-red-100" : "bg-purple-50 text-purple-600 border border-purple-100"}`}>
+                    {sortOrder === "sos" ? "🆘 SOS順" : "✨ おすすめ順"}
+                  </span>
+                </div>
                 {search && <div className="text-xs text-gray-400">「{search}」の検索結果</div>}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
