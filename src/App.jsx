@@ -2613,7 +2613,7 @@ export default function MachiMatch() {
                 <div className="flex items-center gap-2">
                   <div className="text-sm font-semibold text-gray-700">{towns.length}自治体</div>
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sortOrder === "sos" ? "bg-red-50 text-red-600 border border-red-100" : "bg-purple-50 text-purple-600 border border-purple-100"}`}>
-                    {sortOrder === "sos" ? "🆘 SOS順" : "✨ おすすめ順"}
+                    {sortOrder === "sos" ? "SOS順" : "おすすめ順"}
                   </span>
                 </div>
                 {search && <div className="text-xs text-gray-400">「{search}」の検索結果</div>}
