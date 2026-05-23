@@ -415,3 +415,101 @@ function businessFallback(companyInput, regions) {
     source: "ローカル",
   };
 }
+
+// ── 自治体向けAIターゲットマッチ ────────────────────────────────
+const MUNICIPALITY_RESPONSE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    targetProfile:    { type: "STRING" },
+    matchType:        { type: "STRING" },
+    outreachMessage:  { type: "STRING" },
+    keyAttraction:    { type: "STRING" },
+    sosHighlight:     { type: "STRING" },
+    actionSuggestion: { type: "STRING" },
+    matchScore:       { type: "INTEGER" },
+  },
+  required: ["targetProfile","matchType","outreachMessage","keyAttraction","sosHighlight","actionSuggestion","matchScore"],
+};
+
+function buildMunicipalityPrompt(townInput) {
+  const { town, targetIssue, targetType, supportList } = townInput;
+  return `あなたは地域の移住・関係人口促進の専門AIです。自治体が抱えるSOS課題に最もマッチする人材・企業のプロフィールを分析し、効果的な呼びかけ文を生成してください。
+
+【自治体情報】
+- 地域名: ${town.prefecture}${town.name}
+- SOS度: ${town.sos_score}（高いほど緊急）
+- 高齢化率: ${town.aging_rate}%
+- 人口: ${town.population?.toLocaleString()}人
+- 主な課題: ${town.issues?.join("、") ?? "未設定"}
+- 地域の強み: ${town.strengths?.slice(0,5).join("、") ?? "未設定"}
+- 産業: ${town.industries?.map(i => i.name).join("、") ?? "未設定"}
+- 支援制度: ${supportList?.slice(0,3).join("、") ?? "なし"}
+- 外国人材受入: ${town.foreigners_ok ? "可" : "準備中"}
+
+【今回ターゲットにしたい課題】
+${targetIssue}
+
+【求める連携タイプ】
+${targetType}
+
+targetProfile: このSOS課題に最もマッチする人物・企業の具体的なプロフィール（どんなスキル・経験・価値観の人か）を60文字以内で
+matchType: 最適な連携タイプ（移住者/副業/地域おこし協力隊/企業/ボランティアのいずれか）
+outreachMessage: SNSやチラシで使える呼びかけ文（ターゲット視点で刺さる内容・80文字以内）
+keyAttraction: この地域がターゲットにとって魅力的な理由（ターゲット目線）を40文字以内で
+sosHighlight: このSOS課題の「なぜ今・なぜあなたに」の訴求ポイントを40文字以内で
+actionSuggestion: 自治体担当者が次にすべき具体的なアクション（リーチ媒体・方法など）を50文字以内で
+matchScore: このターゲット設定の有効性スコア（0-100の整数）`;
+}
+
+export async function matchMunicipalityNeeds(townInput) {
+  if (!GEMINI_API_KEY) return municipalityFallback(townInput);
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    const body = {
+      contents: [{ parts: [{ text: buildMunicipalityPrompt(townInput) }] }],
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 4096,
+        responseMimeType: "application/json",
+        responseSchema: MUNICIPALITY_RESPONSE_SCHEMA,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    };
+    const res = await fetchWithTimeout(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }, GEMINI_TIMEOUT_MS);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const parts = data.candidates?.[0]?.content?.parts ?? [];
+    const text = parts.find(p => !p.thought)?.text ?? parts[parts.length - 1]?.text ?? "";
+    if (!text) throw new Error("empty response");
+    const parsed = JSON.parse(text);
+    return { ...parsed, source: "Gemini" };
+  } catch (err) {
+    console.warn("[Machi Match Municipality] Gemini 失敗 →", err.message);
+    return municipalityFallback(townInput);
+  }
+}
+
+function municipalityFallback({ town, targetIssue, targetType }) {
+  const typeMap = {
+    "移住者":         { profile: "地方移住に関心がある30〜40代・都市在住者", outreach: `${town.name}で暮らしながら${targetIssue}の課題解決に携わりませんか？移住支援制度あり。` },
+    "副業ワーカー":   { profile: "週末や空き時間にスキルを地域貢献に活かしたい都市部在住者", outreach: `スキルを活かして${town.name}の${targetIssue}を副業で解決しませんか？` },
+    "地域おこし協力隊": { profile: "地域密着で社会課題解決に挑戦したい20〜30代", outreach: `${town.name}の地域おこし協力隊として${targetIssue}の最前線で活躍しませんか？` },
+    "企業":           { profile: "地域課題解決型の新規事業・CSRを検討している中小企業", outreach: `${town.name}のSOS課題と貴社の強みをマッチング。新規市場・CSR実績を同時に獲得しませんか？` },
+    "ボランティア":   { profile: "社会貢献に関心のある20〜30代の若者・学生", outreach: `${town.name}で${targetIssue}の解決に貢献しませんか？交通費支援あり。` },
+  };
+  const t = typeMap[targetType] ?? typeMap["副業ワーカー"];
+  return {
+    targetProfile: t.profile,
+    matchType: targetType ?? "副業ワーカー",
+    outreachMessage: t.outreach,
+    keyAttraction: `${town.strengths?.[0] ?? "豊かな自然"}と温かいコミュニティ`,
+    sosHighlight: `${targetIssue}は今すぐ解決が必要な緊急課題`,
+    actionSuggestion: "移住ポータルへの掲載 + SNS（X/Instagram）でハッシュタグ活用を検討",
+    matchScore: 72,
+    source: "ローカル",
+  };
+}
